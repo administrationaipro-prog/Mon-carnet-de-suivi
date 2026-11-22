@@ -1,0 +1,31 @@
+# Déploiement : docker compose up -d   (renseigner d’abord le fichier .env — voir .env.example)
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?à définir}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?à définir}
+      BACKUP_DB_PASSWORD: ${BACKUP_DB_PASSWORD:?à définir}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/init-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d carnet"]
+      interval: 5s
+      retries: 20
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://carnet_owner:${APP_DB_PASSWORD}@db:5432/carnet
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?à définir}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?à définir}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+volumes:
+  pgdata:
