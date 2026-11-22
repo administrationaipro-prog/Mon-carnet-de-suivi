@@ -237,6 +237,21 @@ try {
   await shot(admin, '09-audit');
   log('Journal d’audit consultable par l’administrateur');
 
+  // Exploitation propre de l’administrateur
+  await admin.goto(BASE);
+  const hasFarm = await admin.getByText('Effectif actif').count();
+  if (!hasFarm) {
+    await admin.getByRole('button', { name: /Créer mon exploitation/ }).click();
+    await admin.getByLabel(/^Nom ou référence/).fill(`Ferme admin ${RUN}`);
+    await admin.getByLabel(/^Localité/).fill('Sainte-Anne');
+    await admin.getByRole('button', { name: 'Créer mon exploitation' }).click();
+    await expectText(admin, 'Effectif actif');
+  }
+  await admin.getByRole('link', { name: /Mon cheptel/ }).first().waitFor();
+  await admin.getByRole('link', { name: /Administration/ }).first().waitFor();
+  await shot(admin, '10-admin-exploitation');
+  log('Administrateur : « Créer mon exploitation » → espace éleveur + administration');
+
   if (errors.length) throw new Error('Erreurs navigateur :\n' + errors.join('\n'));
   console.log(`\nE2E : ${step} étapes réussies, aucune erreur JavaScript. Captures : ${SCREENS}/`);
 } catch (e) {

@@ -353,6 +353,25 @@ describe('Partage collectif consenti (§24, §27)', () => {
   });
 });
 
+describe('Exploitation propre de l’administrateur', () => {
+  it('l’administrateur crée son exploitation, réservé aux administrateurs, isolée des autres', async () => {
+    const body = { territory_code: 'MQ', name: 'Ferme de l’admin', locality: 'Sainte-Anne', objective: 'meat' };
+    expect((await post(admin, '/api/admin/my-farm', { ...body, territory_code: 'BB' })).body.error).toBe('territory_not_open');
+    const r = await post(admin, '/api/admin/my-farm', body);
+    expect(r.status).toBe(200);
+    const farms = (await admin.get('/api/farms')).body;
+    expect(farms.find((f: any) => f.id === r.body.farm_id).role).toBe('owner');
+    const an = await post(admin, `/api/farms/${r.body.farm_id}/animals`, animal({ internal_id: 'ADM-1' }));
+    expect(an.status).toBe(200);
+    // un éleveur ordinaire ne peut ni utiliser la route ni voir cette exploitation
+    const other = await approvedFarmer(app, admin, 'notadmin@farm.org');
+    expect((await post(other, '/api/admin/my-farm', body)).status).toBe(403);
+    expect((await other.get(`/api/farms/${r.body.farm_id}/animals`)).status).toBe(404);
+    const log = await pool.query(`select 1 from audit_logs where action = 'admin.own_farm_created' and farm_id = $1`, [r.body.farm_id]);
+    expect(log.rowCount).toBe(1);
+  });
+});
+
 describe('Droits RGPD', () => {
   it('export des données personnelles et suppression du compte', async () => {
     const u = await registerVerified(app, 'rgpd@test.org');

@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
 import { post } from '../api';
+import { useState } from 'react';
+import { Field } from '../components/ui';
 import { useApp } from '../state';
 import { Card, ErrorMsg, Loading, Notice, Stat, useLoad, useSubmit, Badge } from '../components/ui';
 import { Registration } from './Registration';
@@ -37,6 +39,40 @@ export function AlertList({ alerts }: { alerts: any[] }) {
   );
 }
 
+/** Création directe de sa propre exploitation par un administrateur (tracée dans le journal d’audit). */
+export function CreateOwnFarm() {
+  const { t, lang, refresh, setFarmId } = useApp();
+  const terr = useLoad<any[]>('/ref/territories');
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ territory_code: 'MQ', name: '', locality: '', objective: 'meat' });
+  const s = useSubmit(async () => {
+    const r = await post('/admin/my-farm', f);
+    setFarmId(r.farm_id); setOpen(false); await refresh();
+  });
+  const up = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
+  return (
+    <Card title={t('create_own_farm')}>
+      <p className="small muted">{t('create_own_farm_text')}</p>
+      {!open ? <button className="btn primary" onClick={() => setOpen(true)}>＋ {t('create_own_farm')}</button> : (
+        <form className="stack" onSubmit={(e) => { e.preventDefault(); s.run(); }}>
+          <div className="grid2">
+            <Field label={t('farm_name')} required><input required minLength={2} value={f.name} onChange={up('name')} /></Field>
+            <Field label={t('locality')} required><input required value={f.locality} onChange={up('locality')} /></Field>
+            <Field label={t('territory')} required>
+              <select value={f.territory_code} onChange={up('territory_code')}>
+                {(terr.data ?? []).filter((x) => x.active).map((x) => <option key={x.code} value={x.code}>{lang === 'fr' ? x.name_fr : x.name_en}</option>)}
+              </select>
+            </Field>
+            <Field label={t('objective')}><select value={f.objective} onChange={up('objective')}>{['meat', 'reproduction', 'mixed'].map((o) => <option key={o} value={o}>{t(`objective.${o}`)}</option>)}</select></Field>
+          </div>
+          <ErrorMsg error={s.error} />
+          <div className="row"><button className="btn primary" disabled={s.busy}>{t('create_own_farm')}</button><button type="button" className="btn" onClick={() => setOpen(false)}>{t('cancel')}</button></div>
+        </form>
+      )}
+    </Card>
+  );
+}
+
 export function Home() {
   const { t, me, farm, d, num } = useApp();
   const dash = useLoad<any>(farm ? `/farms/${farm.id}/dashboard` : null, [farm?.id]);
@@ -47,6 +83,7 @@ export function Home() {
       <div className="stack">
         <Invitations />
         {(role === 'admin' || role === 'validator') && <Notice>{t('no_farm')} <Link to="/review">{t('review_title')} →</Link></Notice>}
+        {role === 'admin' && <CreateOwnFarm />}
         {role === 'analyst' && <Notice><Link to="/collective">{t('collective_stats')} →</Link></Notice>}
         {role === 'none' && <Registration />}
       </div>

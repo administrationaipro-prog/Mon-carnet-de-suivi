@@ -137,6 +137,36 @@ adminRouter.put('/breeds/:code', h(async (c) => {
   return { ok: true };
 }));
 
+/**
+ * L’administrateur crée sa propre exploitation (il en devient responsable).
+ * Tracé comme une demande d’inscription approuvée, avec motif explicite, pour garder une piste d’audit homogène.
+ */
+adminRouter.post('/my-farm', h(async (c) => {
+  requirePlatform(c, 'admin');
+  const b = parse(z.object({
+    territory_code: z.string().min(2).max(3),
+    name: z.string().trim().min(2).max(150),
+    locality: z.string().trim().min(1).max(150),
+    objective: z.enum(['meat', 'reproduction', 'mixed']).default('mixed'),
+  }), c.req.body);
+  const terr = await c.db.query('select active from territories where code = $1', [b.territory_code]);
+  if (!terr.rows[0]) throw bad('unknown_territory');
+  if (!terr.rows[0].active) throw bad('territory_not_open');
+  const f = await c.db.query(`insert into farms (territory_code, name, locality, objective) values ($1,$2,$3,$4) returning id`, [b.territory_code, b.name, b.locality, b.objective]);
+  const farmId = f.rows[0].id;
+  await c.db.query(`insert into memberships (user_id, farm_id, role) values ($1,$2,'owner')`, [c.user.id, farmId]);
+  const productionType = b.objective === 'meat' ? 'sheep_meat' : b.objective === 'reproduction' ? 'sheep_breeding' : 'sheep_mixed';
+  const reason = 'Création directe par un administrateur pour sa propre exploitation';
+  const r = await c.db.query(
+    `insert into registration_requests (user_id, status, territory_code, farm_name, locality, production_type, accepted_terms, truthful_declaration,
+       reviewer_id, decision_reason, farm_id, submitted_at, decided_at)
+     values ($1,'approved',$2,$3,$4,$5,true,true,$1,$6,$7,now(),now()) returning id`,
+    [c.user.id, b.territory_code, b.name, b.locality, productionType, reason, farmId]);
+  await c.db.query(`insert into registration_history (request_id, actor_id, from_status, to_status, reason) values ($1,$2,null,'approved',$3)`, [r.rows[0].id, c.user.id, reason]);
+  await audit(c.db, { actor: c.user.id, action: 'admin.own_farm_created', resource: 'farm', resourceId: farmId, farmId, details: { name: b.name }, ip: c.ip });
+  return { farm_id: farmId };
+}));
+
 adminRouter.get('/outbox', h(async (c) => {
   requirePlatform(c, 'admin');
   return (await c.db.query('select * from outbox_emails order by created_at desc limit 100')).rows;

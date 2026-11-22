@@ -45,6 +45,7 @@ const fr = {
   home_alerts: 'Alertes et contrôles programmés', home_no_alerts: 'Aucune alerte.', home_shortcuts: 'Raccourcis', females: 'femelles', males: 'mâles',
   'alert.weighing_overdue': 'Pesée J{day} en retard (prévue le {date})', 'alert.weighing_due': 'Pesée J{day} prévue le {date}', 'alert.health_followup': 'Suivi sanitaire prévu le {date}',
   'alert.withdrawal_period': 'Délai d’attente ({product}) jusqu’au {date}', 'alert.lambing_expected': 'Mise bas attendue vers le {date}',
+  create_own_farm: 'Créer mon exploitation', create_own_farm_text: 'En tant qu’administrateur, vous pouvez créer directement votre propre exploitation et en devenir le responsable. Cette création est inscrite au journal d’audit.',
   invitations_pending: 'Invitations en attente', accept: 'Accepter', decline: 'Refuser', no_farm: 'Aucune exploitation active.',
   // animaux
   herd_title: 'Mon cheptel', add_animal: 'Ajouter un animal', internal_id: 'Identifiant interne', official_id: 'Identification officielle', animal_name: 'Nom / surnom',
@@ -182,6 +183,7 @@ const en: Record<keyof typeof fr, string> = {
   home_alerts: 'Alerts and scheduled checks', home_no_alerts: 'No alerts.', home_shortcuts: 'Shortcuts', females: 'females', males: 'males',
   'alert.weighing_overdue': 'D{day} weighing overdue (due {date})', 'alert.weighing_due': 'D{day} weighing due {date}', 'alert.health_followup': 'Health follow-up due {date}',
   'alert.withdrawal_period': 'Withdrawal period ({product}) until {date}', 'alert.lambing_expected': 'Lambing expected around {date}',
+  create_own_farm: 'Create my farm', create_own_farm_text: 'As an administrator, you can directly create your own farm and become its manager. This is recorded in the audit log.',
   invitations_pending: 'Pending invitations', accept: 'Accept', decline: 'Decline', no_farm: 'No active farm.',
   herd_title: 'My flock', add_animal: 'Add an animal', internal_id: 'Internal ID', official_id: 'Official ID', animal_name: 'Name / nickname',
   sex: 'Sex', 'sex.M': 'Male', 'sex.F': 'Female', birth_date: 'Birth date', breed: 'Breed / cross', breed_declared: 'Declared label (as used locally)',
