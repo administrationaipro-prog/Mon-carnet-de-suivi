@@ -81,7 +81,7 @@ Le fichier `render.yaml` décrit l’application web et sa base PostgreSQL (rég
 3. Saisir `ADMIN_EMAIL` et `ADMIN_PASSWORD` lorsque Render les demande, puis **Apply**.
 4. À la fin du déploiement, ouvrir l’adresse `https://….onrender.com` et se connecter avec ce compte administrateur (activation de la double authentification à la première connexion).
 
-L’adresse publique est détectée automatiquement (`RENDER_EXTERNAL_URL`) : cookies `Secure` et HSTS sont activés. Le plan gratuit convient à un essai (mise en veille, base gratuite à durée limitée) ; prévoir un plan payant avec sauvegardes pour le pilote.
+L’adresse publique est détectée automatiquement (`RENDER_EXTERNAL_URL`) : cookies `Secure` et HSTS sont activés. `render.yaml` déclare les plans payants : site `starter` (sans mise en veille) et base `basic-256mb` (permanente). Les plans indiqués dans ce fichier font foi : un changement fait seulement dans le tableau de bord peut être annulé à la synchronisation suivante du Blueprint.
 
 ### Envoi des courriels (Brevo)
 
