@@ -1,0 +1,43 @@
+# Blueprint Render : application web Node.js + base PostgreSQL gérée, région Francfort (UE).
+# Création : render.com → New → Blueprint → choisir ce dépôt. Render demandera ADMIN_EMAIL et ADMIN_PASSWORD.
+# Plan « free » pour l’essai uniquement (mise en veille, base gratuite temporaire) : passer à un plan payant pour le pilote.
+services:
+  - type: web
+    name: carnet-de-suivi
+    runtime: node
+    region: frankfurt
+    plan: free
+    # --include=dev : les outils de compilation (TypeScript, Vite) sont nécessaires au build malgré NODE_ENV=production
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: carnet-db
+          property: connectionString
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      # Envoi des courriels (Brevo) : clé API et adresse d’expéditeur validée dans Brevo
+      - key: BREVO_API_KEY
+        sync: false
+      - key: MAIL_FROM_EMAIL
+        sync: false
+      - key: MAIL_FROM_NAME
+        value: Carnet de suivi
+    # PUBLIC_URL est déduite automatiquement de RENDER_EXTERNAL_URL (https://….onrender.com)
+
+databases:
+  - name: carnet-db
+    databaseName: carnet
+    user: carnet_owner
+    region: frankfurt
+    plan: free
+    postgresMajorVersion: "16"
+    ipAllowList: []  # aucun accès depuis Internet : seule l’application (réseau privé Render) se connecte

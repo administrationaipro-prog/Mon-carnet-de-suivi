@@ -1,0 +1,269 @@
+// Test de bout en bout dans un vrai navigateur (Chromium/Playwright).
+// Prérequis : serveur démarré (npm start) sur BASE_URL, base accessible via DATABASE_URL.
+// Usage : node scripts/e2e.mjs   (variables : BASE_URL, DATABASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD, SCREENS=dossier)
+import { createRequire } from 'node:module';
+import { mkdirSync, readFileSync, existsSync } from 'node:fs';
+const require = createRequire(import.meta.url);
+const { chromium } = require('playwright');
+const pg = createRequire(new URL('../server/package.json', import.meta.url))('pg');
+const { totp } = await import('../server/dist/lib/crypto.js');
+
+if (existsSync('.env')) for (const l of readFileSync('.env', 'utf8').split('\n')) { const m = l.match(/^([A-Z_]+)=(.*)$/); if (m && !process.env[m[1]]) process.env[m[1]] = m[2]; }
+const BASE = process.env.BASE_URL ?? 'http://localhost:3000';
+const db = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const ADMIN = { email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD };
+const SCREENS = process.env.SCREENS ?? 'e2e-screens';
+mkdirSync(SCREENS, { recursive: true });
+const RUN = Date.now().toString(36);
+const FARMER = { email: `eleveur-${RUN}@example.org`, password: 'Brebis-Martinique-2026' };
+
+let step = 0; const errors = [];
+const log = (m) => console.log(`✔ ${String(++step).padStart(2, '0')} ${m}`);
+async function token(email) {
+  const r = await db.query('select body from outbox_emails where to_email = $1 order by id desc limit 1', [email]);
+  return /token=([A-Za-z0-9_-]+)/.exec(r.rows[0]?.body ?? '')?.[1];
+}
+function watch(page, who) {
+  page.on('pageerror', (e) => errors.push(`[${who}] pageerror: ${e.message}`));
+  page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|status of 4\d\d/.test(m.text())) errors.push(`[${who}] console: ${m.text()}`); });
+}
+const expectText = async (page, text, timeout = 8000) => { await page.getByText(text, { exact: false }).first().waitFor({ timeout }); };
+async function selectByText(sel, text) {
+  const v = await sel.evaluate((el, t) => [...el.options].find((o) => o.textContent.startsWith(t))?.value, text);
+  if (!v) throw new Error('option introuvable : ' + text);
+  await sel.selectOption(v);
+}
+/** Requête exécutée dans le contexte RLS d’un utilisateur (comme le fait l’API). */
+async function asUser(email, sql, params = []) {
+  const c = await db.connect();
+  try {
+    await c.query('begin');
+    await c.query("select set_config('app.user_id', (select id::text from users where email = $1), true)", [email]);
+    const r = await c.query(sql, params);
+    await c.query('commit');
+    return r;
+  } finally { c.release(); }
+}
+const shot = (page, name) => page.screenshot({ path: `${SCREENS}/${name}.png`, fullPage: true });
+
+const browser = await chromium.launch();
+try {
+  // ---------- Administrateur : connexion + MFA ----------
+  const adminCtx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const admin = await adminCtx.newPage(); watch(admin, 'admin');
+  await admin.goto(BASE);
+  await admin.getByLabel('Adresse courriel').fill(ADMIN.email);
+  await admin.getByLabel('Mot de passe').fill(ADMIN.password);
+  await admin.getByRole('button', { name: 'Se connecter' }).click();
+  await expectText(admin, 'Double authentification');
+  const mfaEnabled = (await db.query('select mfa_enabled, mfa_secret from users where email = $1', [ADMIN.email])).rows[0];
+  if (!mfaEnabled.mfa_enabled) {
+    await admin.getByRole('button', { name: 'Générer la clé' }).click();
+    const secret = (await admin.getByTestId('mfa-secret').innerText()).trim();
+    await admin.getByLabel('Code à 6 chiffres').fill(totp(secret));
+  } else {
+    await admin.getByLabel('Code à 6 chiffres').fill(totp(mfaEnabled.mfa_secret));
+  }
+  await admin.getByRole('button', { name: 'Confirmer' }).click();
+  await admin.getByRole('link', { name: /Administration/ }).first().waitFor();
+  log('Administrateur connecté avec double authentification (TOTP)');
+
+  // ---------- Nouvel éleveur : choix langue → compte → vérification → dossier ----------
+  const farmerCtx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const farmer = await farmerCtx.newPage(); watch(farmer, 'éleveur');
+  await farmer.goto(`${BASE}/register`);
+  await farmer.getByRole('button', { name: 'FR', exact: true }).click();
+  await farmer.getByLabel('Prénom').fill('Marie');
+  await farmer.getByLabel(/^Nom/).fill('Sainte-Rose');
+  await farmer.getByLabel('Adresse courriel').fill(FARMER.email);
+  await farmer.getByLabel('Mot de passe').fill(FARMER.password);
+  await farmer.getByRole('button', { name: 'Créer un compte' }).click();
+  await expectText(farmer, 'Vérifiez votre adresse courriel');
+  await farmer.goto(`${BASE}/herd`);
+  await expectText(farmer, 'Vérifiez votre adresse courriel');
+  log('Compte créé ; fonctions bloquées tant que l’adresse n’est pas vérifiée');
+  await farmer.goto(`${BASE}/verify-email?token=${await token(FARMER.email)}`);
+  await farmer.getByRole('button', { name: 'Confirmer' }).click();
+  await expectText(farmer, 'Adresse vérifiée');
+  await farmer.goto(BASE);
+  await expectText(farmer, 'Dossier d’inscription éleveur');
+  await farmer.getByLabel('Nom ou référence de l’exploitation').fill(`Habitation Bellevue ${RUN}`);
+  await farmer.getByLabel('Localité / commune').fill('Le François');
+  // Changement de langue : la saisie en cours est conservée
+  await farmer.getByRole('button', { name: 'EN', exact: true }).click();
+  await expectText(farmer, 'Farmer registration file');
+  if (await farmer.getByLabel('Farm name or reference').inputValue() !== `Habitation Bellevue ${RUN}`) throw new Error('Saisie perdue au changement de langue');
+  await farmer.getByRole('button', { name: 'FR', exact: true }).click();
+  log('Changement de langue FR→EN→FR sans perte de la saisie en cours');
+  await farmer.getByLabel('J’accepte les conditions').check();
+  await farmer.getByLabel('Je déclare sur l’honneur').check();
+  await farmer.getByRole('button', { name: 'Soumettre la demande' }).click();
+  await expectText(farmer, 'Votre demande a été reçue');
+  await shot(farmer, '01-demande-en-attente-mobile');
+  log('Dossier d’inscription soumis (état « En attente »)');
+
+  // ---------- Validation par l’administrateur ----------
+  await admin.getByRole('link', { name: /Demandes/ }).first().click();
+  await admin.getByRole('link', { name: 'Marie Sainte-Rose' }).first().click();
+  await expectText(admin, `Habitation Bellevue ${RUN}`);
+  await shot(admin, '02-examen-demande');
+  await admin.getByRole('button', { name: 'Approuver' }).click();
+  await expectText(admin, 'Approuvée');
+  log('Demande approuvée : exploitation créée, décision tracée');
+
+  // ---------- Éleveur approuvé : animaux, pesées, GMQ ----------
+  await farmer.goto(BASE);
+  await expectText(farmer, `Habitation Bellevue ${RUN}`);
+  await expectText(farmer, 'Effectif actif');
+  for (const a of [
+    { id: 'B1', name: 'Bélier 1', birth: '2026-09-19', breed: 'Black Belly × Île-de-France', w: [['2026-10-31', '11.30'], ['2026-11-07', '12.81'], ['2026-11-14', '13.29']] },
+    { id: 'B2', name: 'Bélier 2', birth: '2026-09-29', breed: 'Saint-Martin × Île-de-France', w: [['2026-10-31', '9.80'], ['2026-11-07', '11.67'], ['2026-11-14', '12.32']] },
+  ]) {
+    await farmer.goto(`${BASE}/herd/new`);
+    await farmer.getByLabel('Identifiant interne').fill(a.id);
+    await farmer.getByLabel('Nom / surnom').fill(a.name);
+    await farmer.getByLabel('Sexe').selectOption('M');
+    await farmer.getByLabel('Date de naissance').fill(a.birth);
+    await farmer.getByLabel('Race / croisement').selectOption({ label: a.breed });
+    await farmer.getByLabel('Poids de naissance (kg)').fill('3.4');
+    await farmer.getByRole('button', { name: 'Enregistrer' }).click();
+    await expectText(farmer, 'Courbe de croissance');
+    for (const [date, kg] of a.w) {
+      await farmer.getByRole('button', { name: /Nouvelle pesée/ }).click();
+      const dlg = farmer.getByRole('dialog');
+      await dlg.getByLabel(/^Date( \*)?$/).fill(date);
+      await dlg.getByLabel('Poids (kg)').fill(kg);
+      await dlg.getByRole('button', { name: 'Enregistrer' }).click();
+      await dlg.getByText('Pesée enregistrée').waitFor();
+      await dlg.getByRole('button', { name: 'Fermer' }).click();
+    }
+  }
+  await expectText(farmer, '180'); // GMQ global Bélier 2 = 180 g/j
+  await shot(farmer, '03-fiche-animale-mobile');
+  log('Animaux de démonstration créés ; pesées saisies ; GMQ global de Bélier 2 = 180 g/j');
+
+  // Règles de gestion : poids non positif, date avant naissance, doublon → confirmation
+  await farmer.goto(`${BASE}/weigh`);
+  await selectByText(farmer.getByLabel('Choisir un animal'), 'B1 — Bélier 1');
+  await farmer.getByLabel(/^Date( \*)?$/).fill('2026-11-14');
+  await farmer.getByLabel('Poids (kg)').fill('13.3');
+  await farmer.getByRole('button', { name: 'Enregistrer' }).click();
+  await expectText(farmer, 'une pesée existe déjà à cette date');
+  await farmer.getByRole('button', { name: 'Annuler' }).first().click();
+  log('Doublon de pesée signalé avec demande de confirmation');
+
+  // ---------- Hors connexion : file d’attente puis synchronisation ----------
+  await farmer.getByLabel(/^Date( \*)?$/).fill('2026-11-21');
+  await farmer.getByLabel('Poids (kg)').fill('13.9');
+  await farmerCtx.setOffline(true);
+  await farmer.evaluate(() => window.dispatchEvent(new Event('offline')));
+  await farmer.getByRole('button', { name: 'Enregistrer' }).click();
+  await expectText(farmer, 'pesée mise en file d’attente');
+  await expectText(farmer, '1 saisie(s) en attente');
+  await shot(farmer, '04-hors-connexion');
+  await farmerCtx.setOffline(false);
+  await farmer.evaluate(() => window.dispatchEvent(new Event('online')));
+  for (let i = 0; i < 20; i++) { if (!(await farmer.getByText('en attente de synchronisation').count())) break; await farmer.waitForTimeout(250); }
+  const synced = await asUser(FARMER.email, `select count(*)::int n from weighings w join animals a on a.id = w.animal_id where w.date = '2026-11-21' and w.source = 'offline_sync' and a.internal_id = 'B1'`);
+  if (synced.rows[0].n !== 1) throw new Error('Synchronisation hors connexion non effectuée');
+  log('Pesée saisie hors connexion puis synchronisée une seule fois au retour du réseau');
+
+  // ---------- Santé, alimentation, analyses, export ----------
+  await farmer.goto(`${BASE}/health`);
+  await expectText(farmer, 'n’établit aucun diagnostic');
+  await selectByText(farmer.getByLabel('Choisir un animal'), 'B2 — Bélier 2');
+  await farmer.getByLabel(/^Type/).selectOption('analysis');
+  await farmer.getByLabel('Analyse (ex. coproscopie)').fill('Coproscopie');
+  await farmer.getByLabel(/^Résultat/).fill('850 OPG');
+  await farmer.getByLabel('Score FAMACHA (1–5)').fill('3');
+  await farmer.getByRole('button', { name: 'Ajouter' }).click();
+  await expectText(farmer, '850 OPG');
+  log('Événement sanitaire (coproscopie, FAMACHA) enregistré');
+
+  await farmer.goto(`${BASE}/parcels`);
+  await farmer.getByPlaceholder('Nom du lot').fill('Engraissement');
+  await farmer.getByRole('button', { name: 'Ajouter' }).first().click();
+  await expectText(farmer, 'Engraissement');
+  await farmer.goto(`${BASE}/feeding`);
+  await farmer.getByLabel(/^Lot/).selectOption({ label: 'Engraissement' });
+  await farmer.getByLabel('Aliment').fill('Granulé');
+  await farmer.getByLabel('Quantité (kg)').fill('25');
+  await farmer.getByLabel('Coût (€)').fill('18.50');
+  await farmer.getByLabel('Début').fill('2026-11-01');
+  await farmer.getByRole('button', { name: 'Ajouter' }).click();
+  await expectText(farmer, 'Granulé');
+  log('Lot créé et ration enregistrée (distribuée, base brute, coût)');
+
+  await farmerCtx.close();
+  // Analyses sur grand écran
+  const deskCtx = await browser.newContext({ viewport: { width: 1366, height: 900 }, acceptDownloads: true });
+  const desk = await deskCtx.newPage(); watch(desk, 'éleveur-bureau');
+  await desk.goto(BASE);
+  await desk.getByLabel('Adresse courriel').fill(FARMER.email);
+  await desk.getByLabel('Mot de passe').fill(FARMER.password);
+  await desk.getByRole('button', { name: 'Se connecter' }).click();
+  await expectText(desk, 'Effectif actif');
+  await shot(desk, '05-accueil-bureau');
+  await desk.getByRole('link', { name: /Analyses/ }).first().click();
+  await expectText(desk, 'Croissance par race / croisement');
+  await expectText(desk, 'Aucune relation causale');
+  await desk.waitForTimeout(400);
+  await shot(desk, '06-analyses');
+  const [dl] = await Promise.all([desk.waitForEvent('download'), desk.getByRole('button', { name: 'CSV weighings' }).click()]);
+  const csv = readFileSync(await dl.path(), 'utf8');
+  if (!csv.includes('B2;2026-11-14;12.32')) throw new Error('CSV inattendu : ' + csv.slice(0, 300));
+  log('Analyses affichées avec effectifs et avertissement ; export CSV fidèle');
+
+  await desk.goto(`${BASE}/collective`);
+  await expectText(desk, 'Participation volontaire');
+  await desk.getByLabel('J’ai lu ces informations').check();
+  await desk.getByRole('button', { name: 'Donner mon accord' }).click();
+  await expectText(desk, 'Accord actif');
+  await expectText(desk, 'Exploitations participantes');
+  // la cellule n’est publiée qu’au-delà du seuil : masquée tant que < 5 exploitations consentent
+  const consenting = (await db.query(`select count(distinct farm_id)::int n from consents where revoked_at is null`)).rows[0].n;
+  if (consenting < 5) await expectText(desk, 'Masqué (moins de 5 exploitations)');
+  await shot(desk, '07-collectif');
+  log('Consentement explicite enregistré ; cellule < 5 exploitations masquée');
+
+  await desk.goto(`${BASE}/herd`);
+  await desk.getByRole('button', { name: 'EN', exact: true }).click();
+  await expectText(desk, 'My flock');
+  await expectText(desk, 'Overall ADG');
+  await shot(desk, '08-cheptel-en');
+  log('Interface en anglais (catalogue central)');
+
+  // Journal d’audit côté administrateur
+  await admin.goto(`${BASE}/admin`);
+  await admin.getByRole('tab', { name: 'Journal d’audit' }).click();
+  await expectText(admin, 'registration.approve');
+  await shot(admin, '09-audit');
+  log('Journal d’audit consultable par l’administrateur');
+
+  // Exploitation propre de l’administrateur
+  await admin.goto(BASE);
+  await admin.getByText('Effectif actif').or(admin.getByRole('button', { name: /Créer mon exploitation/ })).first().waitFor();
+  const hasFarm = await admin.getByText('Effectif actif').count();
+  if (!hasFarm) {
+    await admin.getByRole('button', { name: /Créer mon exploitation/ }).click();
+    await admin.getByLabel(/^Nom ou référence/).fill(`Ferme admin ${RUN}`);
+    await admin.getByLabel(/^Localité/).fill('Sainte-Anne');
+    await admin.getByRole('button', { name: 'Créer mon exploitation' }).click();
+    await expectText(admin, 'Effectif actif');
+  }
+  await admin.getByRole('link', { name: /Mon cheptel/ }).first().waitFor();
+  await admin.getByRole('link', { name: /Administration/ }).first().waitFor();
+  await shot(admin, '10-admin-exploitation');
+  log('Administrateur : « Créer mon exploitation » → espace éleveur + administration');
+
+  if (errors.length) throw new Error('Erreurs navigateur :\n' + errors.join('\n'));
+  console.log(`\nE2E : ${step} étapes réussies, aucune erreur JavaScript. Captures : ${SCREENS}/`);
+} catch (e) {
+  console.error('\n✘ ÉCHEC E2E :', e.message);
+  if (errors.length) console.error(errors.join('\n'));
+  for (const c of browser.contexts()) for (const p of c.pages()) await p.screenshot({ path: `${SCREENS}/echec-${Math.random().toString(36).slice(2, 6)}.png`, fullPage: true }).catch(() => {});
+  process.exitCode = 1;
+} finally {
+  await browser.close();
+  await db.end();
+}
