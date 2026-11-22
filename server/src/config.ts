@@ -24,6 +24,11 @@ export const config = {
   adminPassword: process.env.ADMIN_PASSWORD,
   publicUrl,
   sessionDays: 7,
+  // Envoi des courriels via l’API transactionnelle Brevo (sans clé : courriels seulement enregistrés en base)
+  brevoApiKey: process.env.BREVO_API_KEY || null,
+  brevoApiUrl: process.env.BREVO_API_URL ?? 'https://api.brevo.com/v3/smtp/email',
+  mailFromEmail: process.env.MAIL_FROM_EMAIL || null,
+  mailFromName: process.env.MAIL_FROM_NAME ?? 'Carnet de suivi',
   // Cookie « Secure » dès que l’URL publique est en HTTPS (obligatoire en production réelle)
   cookieSecure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : publicUrl.startsWith('https://'),
 };

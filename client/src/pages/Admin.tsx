@@ -26,8 +26,20 @@ export function Admin() {
 function Overview() {
   const { t } = useApp();
   const s = useLoad<any>('/admin/stats');
+  const [sent, setSent] = useState(false);
+  const te = useSubmit(async () => { await post('/admin/test-email'); setSent(true); });
   if (!s.data) return <ErrorMsg error={s.error} />;
-  return <div className="stats"><Stat label={t('users')} value={s.data.users} /><Stat label={t('farms_admin')} value={s.data.farms} /><Stat label={t('pending_requests')} value={s.data.pending_requests} /><Stat label={t('active_consents')} value={s.data.active_consents} /></div>;
+  return (
+    <div className="stack">
+      <div className="stats"><Stat label={t('users')} value={s.data.users} /><Stat label={t('farms_admin')} value={s.data.farms} /><Stat label={t('pending_requests')} value={s.data.pending_requests} /><Stat label={t('active_consents')} value={s.data.active_consents} /></div>
+      <Card title={t('mail_title')}>
+        {s.data.mail_enabled ? <Notice kind="ok">{t('mail_enabled', { from: s.data.mail_from })}</Notice> : <Notice kind="warn">{t('mail_disabled')}</Notice>}
+        <ErrorMsg error={te.error} />
+        {sent && <Notice kind="ok">{t('mail_test_sent')}</Notice>}
+        <button className="btn" disabled={te.busy || !s.data.mail_enabled} onClick={() => te.run()}>{t('mail_test')}</button>
+      </Card>
+    </div>
+  );
 }
 
 function Users() {
@@ -193,12 +205,25 @@ function Audit() {
   );
 }
 
+const MAIL_KIND: Record<string, 'ok' | 'warn' | 'error' | 'neutral'> = { sent: 'ok', pending: 'warn', failed: 'error', logged: 'neutral' };
 function Outbox() {
-  const { dt } = useApp();
+  const { t, dt } = useApp();
   const o = useLoad<any[]>('/admin/outbox');
+  const rt = useSubmit(async (id: number) => { await post(`/admin/outbox/${id}/retry`); o.reload(); });
   return (
-    <Card>
-      <ul className="list small">{(o.data ?? []).map((m) => <li key={m.id}><strong>{dt(m.created_at)} → {m.to_email}</strong> — {m.subject}<pre className="mail">{m.body}</pre></li>)}</ul>
+    <Card actions={<button className="btn small" onClick={() => o.reload()}>↻</button>}>
+      <ErrorMsg error={rt.error} />
+      <ul className="list small">{(o.data ?? []).map((m) => (
+        <li key={m.id}>
+          <div className="row between wrap">
+            <span><strong>{dt(m.created_at)} → {m.to_email}</strong> — {m.subject}</span>
+            <span className="row"><Badge kind={MAIL_KIND[m.status] ?? 'neutral'}>{t(`mailst.${m.status}`)}</Badge>
+              {m.status === 'failed' && <button className="btn small" onClick={() => rt.run(m.id)}>{t('mail_retry')}</button>}</span>
+          </div>
+          {m.last_error && <div className="alert alert-error small">{m.last_error}</div>}
+          <pre className="mail">{m.body}</pre>
+        </li>
+      ))}</ul>
     </Card>
   );
 }

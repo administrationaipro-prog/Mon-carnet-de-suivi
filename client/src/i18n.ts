@@ -120,6 +120,9 @@ const fr = {
   tolerance_days: 'Tolérance (jours)', interp_gap: 'Écart maximal d’interpolation (jours)', consent_version: 'Version de la politique de consentement',
   action: 'Action', resource: 'Ressource', actor: 'Acteur', at: 'Horodatage', result_col: 'Résultat', code: 'Code', label_fr: 'Libellé FR', label_en: 'Libellé EN', synonyms: 'Synonymes',
   is_cross: 'Croisement', timezone: 'Fuseau horaire', active: 'Actif', sharing: 'Partage', owners: 'Responsables', admin_stats: 'Vue d’ensemble', pending_requests: 'Demandes en attente', active_consents: 'Accords de partage actifs',
+  mail_title: 'Envoi des courriels', mail_enabled: 'Envoi actif via Brevo (expéditeur : {from}).', mail_disabled: 'Envoi non configuré : les courriels sont seulement enregistrés ci-dessous (onglet « Courriels envoyés »). Renseignez BREVO_API_KEY et MAIL_FROM_EMAIL sur l’hébergeur.',
+  mail_test: 'M’envoyer un courriel de test', mail_test_sent: 'Courriel de test mis en file : vérifiez votre boîte (et l’onglet « Courriels envoyés »).', mail_retry: 'Renvoyer',
+  'mailst.sent': 'Envoyé', 'mailst.pending': 'En attente', 'mailst.failed': 'Échec', 'mailst.logged': 'Non envoyé (non configuré)',
   // notifications
   'notif.registration_received': 'Demande d’inscription reçue.', 'notif.registration_status': 'Votre demande est désormais : {status}.', 'notif.registration_assigned': 'Nouvelle demande à examiner ({territory}).',
   'notif.invitation': 'Invitation à rejoindre « {farm} ».', no_notifications: 'Aucune notification.', mark_read: 'Tout marquer comme lu',
@@ -141,7 +144,7 @@ const fr = {
   'err.born_alive_required': 'Indiquez le nombre de nés vivants.', 'err.weaned_required': 'Indiquez le nombre de sevrés.', 'err.parent_not_found': 'Parent introuvable dans cette exploitation.',
   'err.invalid_value': 'Valeur invalide.', 'err.check_violation': 'Valeur hors limites.', 'err.cannot_change_self': 'Vous ne pouvez pas modifier vos propres droits.',
   'err.collective_access_denied': 'Statistiques collectives réservées aux membres d’une exploitation validée.', 'err.export_reserved_to_farm': 'Export réservé à l’exploitation.',
-  'err.end_before_start': 'La fin précède le début.', 'err.followup_before_date': 'Le suivi précède la date de l’événement.', 'err.account_suspended': 'Compte suspendu.',
+  'err.end_before_start': 'La fin précède le début.', 'err.mail_not_configured': 'Envoi des courriels non configuré.', 'err.followup_before_date': 'Le suivi précède la date de l’événement.', 'err.account_suspended': 'Compte suspendu.',
 };
 
 const en: Record<keyof typeof fr, string> = {
@@ -247,6 +250,9 @@ const en: Record<keyof typeof fr, string> = {
   tolerance_days: 'Tolerance (days)', interp_gap: 'Maximum interpolation gap (days)', consent_version: 'Consent policy version',
   action: 'Action', resource: 'Resource', actor: 'Actor', at: 'Timestamp', result_col: 'Result', code: 'Code', label_fr: 'French label', label_en: 'English label', synonyms: 'Synonyms',
   is_cross: 'Cross', timezone: 'Time zone', active: 'Active', sharing: 'Sharing', owners: 'Managers', admin_stats: 'Overview', pending_requests: 'Pending requests', active_consents: 'Active sharing consents',
+  mail_title: 'Email sending', mail_enabled: 'Sending active via Brevo (sender: {from}).', mail_disabled: 'Sending not configured: emails are only recorded below (“Sent emails” tab). Set BREVO_API_KEY and MAIL_FROM_EMAIL on the host.',
+  mail_test: 'Send me a test email', mail_test_sent: 'Test email queued: check your inbox (and the “Sent emails” tab).', mail_retry: 'Resend',
+  'mailst.sent': 'Sent', 'mailst.pending': 'Pending', 'mailst.failed': 'Failed', 'mailst.logged': 'Not sent (not configured)',
   'notif.registration_received': 'Registration request received.', 'notif.registration_status': 'Your request is now: {status}.', 'notif.registration_assigned': 'New request to review ({territory}).',
   'notif.invitation': 'Invitation to join “{farm}”.', no_notifications: 'No notifications.', mark_read: 'Mark all as read',
   'err.generic': 'An error occurred.', 'err.network': 'Network unavailable.', 'err.invalid_credentials': 'Incorrect credentials.', 'err.too_many_attempts': 'Too many attempts. Try again in 15 minutes.',
@@ -266,7 +272,7 @@ const en: Record<keyof typeof fr, string> = {
   'err.born_alive_required': 'Enter the number born alive.', 'err.weaned_required': 'Enter the number weaned.', 'err.parent_not_found': 'Parent not found in this farm.',
   'err.invalid_value': 'Invalid value.', 'err.check_violation': 'Value out of range.', 'err.cannot_change_self': 'You cannot change your own rights.',
   'err.collective_access_denied': 'Collective statistics are reserved to members of an approved farm.', 'err.export_reserved_to_farm': 'Export reserved to the farm.',
-  'err.end_before_start': 'End is before start.', 'err.followup_before_date': 'Follow-up is before the event date.', 'err.account_suspended': 'Account suspended.',
+  'err.end_before_start': 'End is before start.', 'err.mail_not_configured': 'Email sending not configured.', 'err.followup_before_date': 'Follow-up is before the event date.', 'err.account_suspended': 'Account suspended.',
 };
 
 export type Key = keyof typeof fr;

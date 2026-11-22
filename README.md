@@ -70,7 +70,7 @@ En développement avec rechargement à chaud : `npm run dev` (API sur :3000, int
 
 À la première connexion, l’administrateur doit activer la double authentification (application TOTP : Google Authenticator, Aegis, FreeOTP…).
 
-**Courriels** : en l’absence de relais SMTP, les messages (vérification, réinitialisation, décisions, invitations) sont enregistrés dans la table `outbox_emails`, affichés dans la console en développement et consultables dans *Administration → Courriels envoyés*. Le branchement d’un relais SMTP se fait dans `server/src/lib/mail.ts`.
+**Courriels** : envoyés via l’API Brevo si `BREVO_API_KEY` et `MAIL_FROM_EMAIL` sont définis (voir plus bas) ; sinon enregistrés dans `outbox_emails`, affichés dans la console en développement et consultables dans *Administration → Courriels envoyés*.
 
 ## Mise en ligne sur Render (sans ordinateur, depuis un navigateur)
 
@@ -83,7 +83,14 @@ Le fichier `render.yaml` décrit l’application web et sa base PostgreSQL (rég
 
 L’adresse publique est détectée automatiquement (`RENDER_EXTERNAL_URL`) : cookies `Secure` et HSTS sont activés. Le plan gratuit convient à un essai (mise en veille, base gratuite à durée limitée) ; prévoir un plan payant avec sauvegardes pour le pilote.
 
-Sans relais SMTP, les liens de vérification d’adresse et de réinitialisation sont visibles dans *Administration → Courriels envoyés* : l’administrateur peut les transmettre aux éleveurs (WhatsApp, SMS) en attendant la configuration d’un envoi de courriels.
+### Envoi des courriels (Brevo)
+
+1. Créer un compte sur brevo.com, puis valider l’adresse d’expéditeur (*Senders, Domains & Dedicated IPs → Senders*).
+2. Créer une clé API (*SMTP & API → API Keys*).
+3. Dans Render, service `carnet-de-suivi` → *Environment* : renseigner `BREVO_API_KEY` et `MAIL_FROM_EMAIL` (l’adresse validée), puis enregistrer (redéploiement automatique).
+4. *Administration → Vue d’ensemble → M’envoyer un courriel de test*. L’état de chaque envoi (envoyé, en attente, échec + motif) est visible dans *Courriels envoyés*.
+
+Les courriels sont mis en file dans la même transaction que l’opération, puis envoyés en arrière-plan (nouvelles tentatives à 1, 4, 9, 16, 25 min ; échec définitif si Brevo refuse la requête). Si Brevo répond « unrecognised IP address », désactiver la restriction d’IP de la clé (*Security → Authorised IPs*) : les adresses de Render ne sont pas fixes. Sans clé configurée, les courriels sont seulement enregistrés et consultables dans *Courriels envoyés*.
 
 ## Déploiement Docker
 

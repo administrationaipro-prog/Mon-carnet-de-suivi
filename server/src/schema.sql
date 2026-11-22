@@ -71,6 +71,16 @@ create table if not exists outbox_emails (
   body text not null,
   created_at timestamptz not null default now()
 );
+-- Suivi d’envoi (Brevo) : pending → sent | failed ; « logged » = aucun fournisseur configuré.
+-- Les courriels existants avant cette évolution passent en « logged » : jamais renvoyés (liens périmés).
+alter table outbox_emails add column if not exists status text not null default 'logged';
+alter table outbox_emails alter column status set default 'pending';
+alter table outbox_emails add column if not exists attempts integer not null default 0;
+alter table outbox_emails add column if not exists next_attempt_at timestamptz not null default now();
+alter table outbox_emails add column if not exists sent_at timestamptz;
+alter table outbox_emails add column if not exists last_error text;
+alter table outbox_emails add column if not exists provider_id text;
+create index if not exists outbox_pending on outbox_emails(next_attempt_at) where status = 'pending';
 
 create table if not exists notifications (
   id bigserial primary key,

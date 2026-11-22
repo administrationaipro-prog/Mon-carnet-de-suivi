@@ -219,7 +219,10 @@ try {
   await desk.getByLabel('J’ai lu ces informations').check();
   await desk.getByRole('button', { name: 'Donner mon accord' }).click();
   await expectText(desk, 'Accord actif');
-  await expectText(desk, 'Masqué (moins de 5 exploitations)');
+  await expectText(desk, 'Exploitations participantes');
+  // la cellule n’est publiée qu’au-delà du seuil : masquée tant que < 5 exploitations consentent
+  const consenting = (await db.query(`select count(distinct farm_id)::int n from consents where revoked_at is null`)).rows[0].n;
+  if (consenting < 5) await expectText(desk, 'Masqué (moins de 5 exploitations)');
   await shot(desk, '07-collectif');
   log('Consentement explicite enregistré ; cellule < 5 exploitations masquée');
 
@@ -239,6 +242,7 @@ try {
 
   // Exploitation propre de l’administrateur
   await admin.goto(BASE);
+  await admin.getByText('Effectif actif').or(admin.getByRole('button', { name: /Créer mon exploitation/ })).first().waitFor();
   const hasFarm = await admin.getByText('Effectif actif').count();
   if (!hasFarm) {
     await admin.getByRole('button', { name: /Créer mon exploitation/ }).click();

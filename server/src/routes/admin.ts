@@ -4,6 +4,7 @@ import { h, parse, requirePlatform } from '../http.js';
 import { bad, notFound } from '../lib/errors.js';
 import { audit } from '../lib/audit.js';
 import { config } from '../config.js';
+import { sendMail, mailEnabled } from '../lib/mail.js';
 
 export const refRouter = Router();
 refRouter.get('/territories', h(async (c) => (await c.db.query('select * from territories order by active desc, name_fr')).rows, { auth: 'none' }));
@@ -167,6 +168,22 @@ adminRouter.post('/my-farm', h(async (c) => {
   return { farm_id: farmId };
 }));
 
+adminRouter.post('/test-email', h(async (c) => {
+  requirePlatform(c, 'admin');
+  await sendMail(c.db, c.user.email, c.user.lang, 'test_email', {});
+  await audit(c.db, { actor: c.user.id, action: 'admin.test_email', resource: 'email', ip: c.ip });
+  return { ok: true, mail_enabled: mailEnabled() };
+}));
+
+adminRouter.post('/outbox/:id/retry', h(async (c) => {
+  requirePlatform(c, 'admin');
+  const { rowCount } = await c.db.query(
+    `update outbox_emails set status = 'pending', attempts = 0, next_attempt_at = now(), last_error = null where id = $1 and status in ('failed','logged')`, [c.req.params.id]);
+  if (!rowCount) throw notFound();
+  if (!mailEnabled()) throw bad('mail_not_configured');
+  return { ok: true };
+}));
+
 adminRouter.get('/outbox', h(async (c) => {
   requirePlatform(c, 'admin');
   return (await c.db.query('select * from outbox_emails order by created_at desc limit 100')).rows;
@@ -179,5 +196,5 @@ adminRouter.get('/stats', h(async (c) => {
             (select count(*)::int from farms where status = 'active') farms,
             (select count(*)::int from registration_requests where status in ('pending','info_requested')) pending_requests,
             (select count(*)::int from consents where revoked_at is null) active_consents`);
-  return { ...r.rows[0], env: config.env };
+  return { ...r.rows[0], env: config.env, mail_enabled: mailEnabled(), mail_from: config.mailFromEmail };
 }));
