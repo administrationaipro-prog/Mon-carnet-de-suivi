@@ -3,7 +3,10 @@
   "private": true,
   "version": "0.3.0",
   "description": "Optimisation de sa production — suivi d'élevage ovin multi-exploitations (FR/EN)",
-  "workspaces": ["server", "client"],
+  "workspaces": [
+    "server",
+    "client"
+  ],
   "scripts": {
     "dev": "npm run dev -w server & npm run dev -w client",
     "build": "npm run build -w client && npm run build -w server",
@@ -13,5 +16,8 @@
     "test": "npm run test -w server && npm run test -w client",
     "test:e2e": "node scripts/e2e.mjs",
     "typecheck": "npm run typecheck -w server && npm run typecheck -w client"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

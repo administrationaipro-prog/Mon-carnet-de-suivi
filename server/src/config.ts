@@ -12,6 +12,9 @@ for (const p of [resolve(process.cwd(), '.env'), resolve(process.cwd(), '..', '.
   }
 }
 
+// URL publique : PUBLIC_URL, sinon celle fournie par l’hébergeur (Render : RENDER_EXTERNAL_URL)
+const publicUrl = process.env.PUBLIC_URL ?? process.env.RENDER_EXTERNAL_URL ?? 'http://localhost:3000';
+
 export const config = {
   databaseUrl: process.env.DATABASE_URL ?? 'postgres://carnet_owner:owner_dev@localhost:5432/carnet',
   port: Number(process.env.PORT ?? 3000),
@@ -19,8 +22,8 @@ export const config = {
   isProd: process.env.NODE_ENV === 'production',
   adminEmail: process.env.ADMIN_EMAIL,
   adminPassword: process.env.ADMIN_PASSWORD,
-  publicUrl: process.env.PUBLIC_URL ?? 'http://localhost:3000',
+  publicUrl,
   sessionDays: 7,
   // Cookie « Secure » dès que l’URL publique est en HTTPS (obligatoire en production réelle)
-  cookieSecure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : (process.env.PUBLIC_URL ?? '').startsWith('https://'),
+  cookieSecure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : publicUrl.startsWith('https://'),
 };

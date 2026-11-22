@@ -72,6 +72,19 @@ En développement avec rechargement à chaud : `npm run dev` (API sur :3000, int
 
 **Courriels** : en l’absence de relais SMTP, les messages (vérification, réinitialisation, décisions, invitations) sont enregistrés dans la table `outbox_emails`, affichés dans la console en développement et consultables dans *Administration → Courriels envoyés*. Le branchement d’un relais SMTP se fait dans `server/src/lib/mail.ts`.
 
+## Mise en ligne sur Render (sans ordinateur, depuis un navigateur)
+
+Le fichier `render.yaml` décrit l’application web et sa base PostgreSQL (région Francfort).
+
+1. Sur render.com : **Sign in with GitHub**.
+2. **New → Blueprint**, choisir ce dépôt (branche contenant `render.yaml`).
+3. Saisir `ADMIN_EMAIL` et `ADMIN_PASSWORD` lorsque Render les demande, puis **Apply**.
+4. À la fin du déploiement, ouvrir l’adresse `https://….onrender.com` et se connecter avec ce compte administrateur (activation de la double authentification à la première connexion).
+
+L’adresse publique est détectée automatiquement (`RENDER_EXTERNAL_URL`) : cookies `Secure` et HSTS sont activés. Le plan gratuit convient à un essai (mise en veille, base gratuite à durée limitée) ; prévoir un plan payant avec sauvegardes pour le pilote.
+
+Sans relais SMTP, les liens de vérification d’adresse et de réinitialisation sont visibles dans *Administration → Courriels envoyés* : l’administrateur peut les transmettre aux éleveurs (WhatsApp, SMS) en attendant la configuration d’un envoi de courriels.
+
 ## Déploiement Docker
 
 ```bash
