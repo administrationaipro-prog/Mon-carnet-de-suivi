@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react
 import { NavLink, Link } from 'react-router-dom';
 import { useApp } from '../state';
 import { readQueue, subscribe, flush } from '../offline';
+import { InstallButton } from './Install';
 
 export function LangSwitch() {
   const { lang, setLang, t } = useApp();
@@ -74,6 +75,7 @@ export function Layout({ children }: { children: ReactNode }) {
           {links.map(([to, k, icon]) => (
             <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => (isActive ? 'active' : '')}><span className="ico" aria-hidden>{icon}</span>{t(k)}</NavLink>
           ))}
+          <div className="nav-install"><InstallButton block small /></div>
           <button className="btn ghost nav-logout" onClick={logout}>{t('logout')}</button>
         </nav>
         <main className="main">{children}</main>

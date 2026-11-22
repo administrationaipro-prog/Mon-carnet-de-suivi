@@ -4,8 +4,9 @@ import { post } from '../api';
 import { useApp } from '../state';
 import { ErrorMsg, Field, Notice, useSubmit } from '../components/ui';
 import { LangSwitch } from '../components/Layout';
+import { InstallButton } from '../components/Install';
 
-function AuthShell({ title, children }: { title: string; children: React.ReactNode }) {
+export function AuthShell({ title, children }: { title: string; children: React.ReactNode }) {
   const { t } = useApp();
   return (
     <div className="auth-wrap">
@@ -33,6 +34,7 @@ export function Login() {
       </form>
       <p className="center small"><Link to="/forgot-password">{t('forgot_password')}</Link></p>
       <p className="center small">{t('no_account')} <Link to="/register">{t('register')}</Link></p>
+      <InstallButton block />
     </AuthShell>
   );
 }

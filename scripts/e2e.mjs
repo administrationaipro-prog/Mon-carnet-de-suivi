@@ -256,6 +256,19 @@ try {
   await shot(admin, '10-admin-exploitation');
   log('Administrateur : « Créer mon exploitation » → espace éleveur + administration');
 
+  // Application installable (PWA) + page d’aide accessible sans compte
+  const instCtx = await browser.newContext();
+  const inst = await instCtx.newPage(); watch(inst, 'installation');
+  await inst.goto(BASE); await inst.waitForTimeout(2000); await inst.reload(); await inst.waitForTimeout(1000);
+  const cdp = await instCtx.newCDPSession(inst);
+  const ie = (await cdp.send('Page.getInstallabilityErrors')).installabilityErrors;
+  if (ie.length) throw new Error('Application non installable : ' + JSON.stringify(ie));
+  await inst.getByRole('link', { name: /Installer l’application/ }).click();
+  await expectText(inst, 'Android (Samsung');
+  await expectText(inst, 'iPhone et iPad — Safari');
+  await instCtx.close();
+  log('Application reconnue installable par Chrome ; bouton et page d’aide à l’installation');
+
   if (errors.length) throw new Error('Erreurs navigateur :\n' + errors.join('\n'));
   console.log(`\nE2E : ${step} étapes réussies, aucune erreur JavaScript. Captures : ${SCREENS}/`);
 } catch (e) {

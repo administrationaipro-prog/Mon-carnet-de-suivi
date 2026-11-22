@@ -14,6 +14,8 @@ import { Members, Collective } from './pages/Farm';
 import { Account, Notifications } from './pages/Account';
 import { ReviewList, ReviewDetail } from './pages/Review';
 import { Admin, AdminFarmView } from './pages/Admin';
+import { InstallPage } from './components/Install';
+import { AuthShell } from './pages/Auth';
 
 function AdminFarm() { const { id } = useParams(); return <AdminFarmView id={id!} />; }
 
@@ -25,6 +27,7 @@ function Routed() {
       <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/installer" element={me.user && me.user.email_verified ? <InstallPage /> : <AuthShell title={`📲 ${t('install_title')}`}><InstallPage embedded /></AuthShell>} />
     </>
   );
   if (!me.user) {
