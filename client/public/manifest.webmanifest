@@ -2,6 +2,7 @@
   "name": "Carnet de suivi — Optimisation de sa production",
   "short_name": "Carnet",
   "description": "Suivi d’élevage ovin : animaux, pesées, GMQ, alimentation, santé, reproduction.",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

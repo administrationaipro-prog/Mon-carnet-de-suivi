@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { post } from '../api';
 import { useState } from 'react';
 import { Field } from '../components/ui';
+import { InstallButton } from '../components/Install';
 import { useApp } from '../state';
 import { Card, ErrorMsg, Loading, Notice, Stat, useLoad, useSubmit, Badge } from '../components/ui';
 import { Registration } from './Registration';
@@ -122,6 +123,7 @@ export function Home() {
               <Link className="btn" to="/herd">🐑 {t('nav_herd')}</Link>
               <Link className="btn" to="/analytics">📈 {t('nav_analytics')}</Link>
               <Link className="btn" to="/health">✚ {t('nav_health')}</Link>
+              <InstallButton />
             </div>
           </Card>
         </>
