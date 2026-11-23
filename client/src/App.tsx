@@ -16,6 +16,7 @@ import { ReviewList, ReviewDetail } from './pages/Review';
 import { Admin, AdminFarmView } from './pages/Admin';
 import { InstallPage } from './components/Install';
 import { AuthShell } from './pages/Auth';
+import { Icon } from './components/Icon';
 
 function AdminFarm() { const { id } = useParams(); return <AdminFarmView id={id!} />; }
 
@@ -45,7 +46,7 @@ function Routed() {
   const needFarm = (el: React.ReactElement) => (farm ? el : <Navigate to="/" replace />);
   return (
     <Layout>
-      <Notice kind="info"><span className="small">{t('demo_warning')}</span></Notice>
+      <p className="demo-note"><Icon name="info" size={15} />{t('demo_warning')}</p>
       <Routes>
         {publicRoutes}
         <Route path="/" element={<Home />} />

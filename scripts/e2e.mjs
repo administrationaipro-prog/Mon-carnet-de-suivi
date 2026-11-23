@@ -27,7 +27,7 @@ function watch(page, who) {
   page.on('pageerror', (e) => errors.push(`[${who}] pageerror: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|status of 4\d\d/.test(m.text())) errors.push(`[${who}] console: ${m.text()}`); });
 }
-const expectText = async (page, text, timeout = 8000) => { await page.getByText(text, { exact: false }).first().waitFor({ timeout }); };
+const expectText = async (page, text, timeout = 8000) => { await page.getByText(text, { exact: false }).filter({ visible: true }).first().waitFor({ timeout }); };
 async function selectByText(sel, text) {
   const v = await sel.evaluate((el, t) => [...el.options].find((o) => o.textContent.startsWith(t))?.value, text);
   if (!v) throw new Error('option introuvable : ' + text);
@@ -209,6 +209,7 @@ try {
   await expectText(desk, 'Aucune relation causale');
   await desk.waitForTimeout(400);
   await shot(desk, '06-analyses');
+  await desk.getByText('Exporter les données (CSV)').click();
   const [dl] = await Promise.all([desk.waitForEvent('download'), desk.getByRole('button', { name: 'CSV weighings' }).click()]);
   const csv = readFileSync(await dl.path(), 'utf8');
   if (!csv.includes('B2;2026-11-14;12.32')) throw new Error('CSV inattendu : ' + csv.slice(0, 300));

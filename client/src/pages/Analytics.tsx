@@ -3,8 +3,9 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { todayIso } from '../api';
 import { useApp } from '../state';
 import { Card, ErrorMsg, Loading, Notice, useLoad, downloadUrl } from '../components/ui';
+import { Icon } from '../components/Icon';
 
-const PALETTE = ['#1f6f43', '#c2410c', '#1d4ed8', '#a21caf', '#0f766e', '#b45309', '#4d7c0f', '#be123c'];
+const PALETTE = ['#0F5C3A', '#EE8A3C', '#2F7FBF', '#9B4DCA', '#1F8A57', '#C9453B', '#6B8E23', '#B05A14'];
 
 export function Analytics() {
   const { t, farm, lang, num, pct, d } = useApp();
@@ -24,20 +25,27 @@ export function Analytics() {
   const breeds = x ? [...new Set(x.curves.map((c: any) => c.breed_code ?? 'UNKNOWN'))] as string[] : [];
   return (
     <div className="stack">
-      <div className="row between wrap">
-        <h1>{t('analytics_title')}</h1>
-        <div className="row wrap">{['animals', 'weighings', 'feeding', 'health', 'repro'].map((k) => (
-          <button key={k} className="btn small" onClick={() => downloadUrl(`/api/farms/${farm.id}/export/${k}.csv?lang=${lang}`)}>CSV {k}</button>
-        ))}</div>
+      <h1>{t('analytics_title')}</h1>
+      <div className="segmented" role="group" aria-label={t('period')}>
+        {[[365, 'p_12m'], [182, 'p_6m'], [30, 'p_30d']].map(([n, k]) => {
+          const f = new Date(Date.now() - (n as number) * 86400000).toISOString().slice(0, 10);
+          const on = q.to === todayIso() && Math.abs(Date.parse(q.from) - Date.parse(f)) < 2 * 86400000;
+          return <button key={k} type="button" className={on ? 'on' : ''} onClick={() => { setFrom(f); setTo(todayIso()); setQ({ from: f, to: todayIso() }); }}>{t(k as string)}</button>;
+        })}
       </div>
-      <Card>
+      <details className="more">
+        <summary>＋ {t('custom_period')}</summary>
+        <div style={{ marginTop: '.6rem' }}>
+          <Card>
         <form className="row wrap" onSubmit={(e) => { e.preventDefault(); setQ({ from, to }); }}>
           <label className="field inline"><span className="field-label">{t('from')}</span><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
           <label className="field inline"><span className="field-label">{t('to')}</span><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
           <button className="btn">{t('apply')}</button>
         </form>
-      </Card>
-      <Notice>{t('descriptive_notice')}</Notice>
+          </Card>
+        </div>
+      </details>
+      <Notice kind="warn"><span className="row" style={{ alignItems: 'flex-start' }}><Icon name="info" size={20} /><span>{t('descriptive_notice')}</span></span></Notice>
       <ErrorMsg error={a.error} />
       {a.loading && !x ? <Loading /> : x && (
         <>
@@ -54,6 +62,22 @@ export function Analytics() {
             </div>
             {ind('completeness', 'ind_completeness', x.indicators.completeness, pct)}
           </div>
+          {x.growth_by_breed.some((g: any) => g.gmq.n > 0) && (() => {
+            const max = Math.max(...x.growth_by_breed.map((g: any) => g.gmq.mean ?? 0), 1);
+            return (
+              <Card title={`${t('growth_by_breed')} · ${t('gmq')} (${t('gmq_unit')})`}>
+                <div className="bars">
+                  {x.growth_by_breed.filter((g: any) => g.gmq.n > 0).sort((a: any, b: any) => (b.gmq.mean ?? 0) - (a.gmq.mean ?? 0)).map((g: any) => (
+                    <div className="bar-row" key={g.breed_code}>
+                      <div className="bar-head"><span>{lang === 'fr' ? g.label_fr : g.label_en}</span><span className="num">{num(g.gmq.mean, 0)}</span></div>
+                      <div className="bar-track"><div className="bar-fill" style={{ width: `${Math.max(4, ((g.gmq.mean ?? 0) / max) * 100)}%` }} /></div>
+                      <div className="bar-sub">n = {g.gmq.n} · {t('missing_data').toLowerCase()} : {g.gmq.missing} · {t('median')} {num(g.gmq.median, 0)}</div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            );
+          })()}
           <Card title={t('growth_by_breed')}>
             <div className="table-wrap"><table className="table">
               <thead><tr><th>{t('breed')}</th><th className="num">{t('animals')}</th><th className="num">{t('gmq')} n</th><th className="num">{t('gmq')} {t('mean')}</th><th className="num">{t('median')}</th><th className="num">{t('min')}–{t('max')}</th><th className="num">{t('missing_data')}</th><th className="num">{t('weight_j30')}</th><th className="num">{t('weight_j60')}</th><th className="num">{t('weight_j90')}</th></tr></thead>
@@ -85,6 +109,12 @@ export function Analytics() {
           )}
         </>
       )}
+      <details className="more">
+        <summary><Icon name="download" size={16} /> {t('exports_csv')}</summary>
+        <div className="row wrap" style={{ marginTop: '.6rem' }}>{['animals', 'weighings', 'feeding', 'health', 'repro'].map((k) => (
+          <button key={k} className="btn small" onClick={() => downloadUrl(`/api/farms/${farm.id}/export/${k}.csv?lang=${lang}`)}>CSV {k}</button>
+        ))}</div>
+      </details>
     </div>
   );
 }

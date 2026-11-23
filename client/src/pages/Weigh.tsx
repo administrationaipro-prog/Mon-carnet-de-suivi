@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../state';
 import { Card, Notice, useLoad, ErrorMsg } from '../components/ui';
 import { WeighingForm } from '../components/WeighingForm';
+import { Sheep } from '../components/Icon';
 import { readQueue, subscribe, discard, flush } from '../offline';
 import { ApiError } from '../api';
 
@@ -22,19 +23,24 @@ export function Weigh() {
     <div className="stack">
       <h1>{t('weigh_title')}</h1>
       {farm.role === 'referent' ? <ErrorMsg error={new ApiError(403, 'read_only')} /> : (
-        <Card>
-          <div className="grid2">
-            <label className="field"><span className="field-label">{t('search')}</span><input type="search" value={filter} onChange={(e) => setFilter(e.target.value)} /></label>
-            <label className="field"><span className="field-label">{t('select_animal')} *</span>
-              <select value={animalId} onChange={(e) => setAnimalId(e.target.value)} required>
-                <option value="">—</option>
-                {animals.map((a) => <option key={a.id} value={a.id}>{a.internal_id}{a.name ? ` — ${a.name}` : ''}{a.last_weight ? ` (${num(a.last_weight, 2)} kg, ${d(a.last_weighing)})` : ''}</option>)}
-              </select>
-            </label>
-          </div>
-          {animal && <WeighingForm key={animal.id} animal={animal} onSaved={() => { list.reload(); recent.reload(); }} />}
-          <p className="small muted">{t('protocol_info')}</p>
-        </Card>
+        <div className="stack">
+          <Card>
+            <div className="picker">
+              <span className="avatar sm"><Sheep size={34} wool="var(--primary)" /></span>
+              <div style={{ flex: 1, minWidth: 0 }} className="stack-sm">
+                <label className="field"><span className="field-label">{t('select_animal')} *</span>
+                  <select value={animalId} onChange={(e) => setAnimalId(e.target.value)} required>
+                    <option value="">{t('select_animal_hint')}</option>
+                    {animals.map((a) => <option key={a.id} value={a.id}>{a.internal_id}{a.name ? ` — ${a.name}` : ''}{a.last_weight ? ` (${num(a.last_weight, 2)} kg, ${d(a.last_weighing)})` : ''}</option>)}
+                  </select>
+                </label>
+                {(list.data?.length ?? 0) > 8 && <input type="search" placeholder={t('search')} aria-label={t('search')} value={filter} onChange={(e) => setFilter(e.target.value)} />}
+              </div>
+            </div>
+          </Card>
+          {animal ? <WeighingForm key={animal.id} animal={animal} last={animal.last_weighing ? { date: animal.last_weighing, weight_kg: animal.last_weight } : null} onSaved={() => { list.reload(); recent.reload(); }} />
+            : <p className="small muted center">{t('protocol_info')}</p>}
+        </div>
       )}
       {conflicts.length > 0 && (
         <Card title={t('sync_conflicts')}>

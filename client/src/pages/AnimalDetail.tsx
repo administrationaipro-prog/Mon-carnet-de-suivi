@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { del, put } from '../api';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { del, put, todayIso } from '../api';
+import { Icon, Sheep } from '../components/Icon';
 import { useApp } from '../state';
 import { Badge, Card, ErrorMsg, Field, Loading, Modal, Notice, numOrNull, useLoad, useSubmit } from '../components/ui';
 import { WeighingForm } from '../components/WeighingForm';
@@ -33,14 +34,31 @@ export function AnimalDetail() {
   const nm = (p: any) => (p ? <Link to={`/herd/${p.id}`}>{p.internal_id}{p.name ? ` — ${p.name}` : ''}</Link> : null);
   return (
     <div className="stack">
-      <div className="row between wrap">
-        <h1>{x.internal_id}{x.name ? ` — ${x.name}` : ''} <Badge kind={x.status === 'active' ? 'ok' : 'warn'}>{t(`astatus.${x.status}`)}</Badge></h1>
-        {canWrite && <div className="row">
-          <button className="btn primary" onClick={() => setWeighOpen(true)}>⚖ {t('nav_weigh')}</button>
-          <Link className="btn" to={`/herd/${x.id}/edit`}>{t('edit')}</Link>
-          {farm.role === 'owner' && <button className="btn danger" onClick={() => remove.run()}>{t('delete')}</button>}
-        </div>}
+      <section className="hero animal-hero">
+        <div className="row between">
+          <button className="icon-btn" style={{ background: 'rgba(255,255,255,.16)', borderColor: 'transparent', color: '#fff' }} onClick={() => nav(-1)} aria-label={t('back')}><Icon name="back" /></button>
+          <span className="chip">● {t(`astatus.${x.status}`)}</span>
+        </div>
+        <div className="animal-id" style={{ marginTop: '.9rem' }}>
+          <span className="avatar"><Sheep size={48} wool="var(--primary)" /></span>
+          <div style={{ minWidth: 0 }}>
+            <h1>{x.name ?? x.internal_id}</h1>
+            <div className="hero-sub">{x.internal_id}{x.official_id ? ` · ${x.official_id}` : ''} · {label(x.breed_code)}</div>
+            <div className="hero-sub">{t(`sex.${x.sex}`)}{x.birth_date ? ` · ${t('born_on', { date: d(x.birth_date) })} · ${t('age_n_days', { n: daysBetween(x.birth_date, x.exit_date ?? todayIso()) })}` : ''}</div>
+          </div>
+        </div>
+      </section>
+      <div className="kpis">
+        <div className="stat"><div className="stat-label">{t('last_weight')}</div><div className="stat-value">{g.last ? num(g.last.weight_kg, 2) : '—'}<small className="muted" style={{ fontSize: '.75rem' }}> kg</small></div></div>
+        <div className="stat accent"><div className="stat-label">{t('gmq_overall')}</div><div className="stat-value">{g.overall !== null ? num(g.overall, 0) : '—'}<small className="muted" style={{ fontSize: '.75rem' }}> {t('gmq_unit')}</small></div></div>
+        <div className="stat mango" title={t('next_weighing')}><div className="stat-label">{t('next_short')}</div><div className="stat-value">{g.schedule.next ? `J${g.schedule.next.day}` : '—'}</div>{g.schedule.next && <div className="stat-sub">{d(g.schedule.next.date)}</div>}</div>
+        <div className="stat hide-mobile"><div className="stat-label">{t('weighings_n')}</div><div className="stat-value">{g.count}</div></div>
       </div>
+      {canWrite && <div className="row wrap">
+        <button className="btn primary" onClick={() => setWeighOpen(true)}><Icon name="scale" />{t('nav_weigh')}</button>
+        <Link className="btn" to={`/herd/${x.id}/edit`}><Icon name="edit" size={18} />{t('edit')}</Link>
+        {farm.role === 'owner' && <button className="btn danger" onClick={() => remove.run()}><Icon name="trash" size={18} />{t('delete')}</button>}
+      </div>}
       <ErrorMsg error={remove.error} />
       <div className="grid2">
         <Card title={t('identity')}>
@@ -78,23 +96,19 @@ export function AnimalDetail() {
       </div>
 
       <Card title={t('growth_curve')}>
-        <div className="stats">
-          <div className="stat"><div className="stat-value">{g.count}</div><div className="stat-label">{t('weighings_n')}</div></div>
-          <div className="stat"><div className="stat-value">{g.overall !== null ? `${num(g.overall, 0)}` : '—'}</div><div className="stat-label">{t('gmq_overall')} ({t('gmq_unit')})</div></div>
-          <div className="stat"><div className="stat-value">{g.last ? `${num(g.last.weight_kg, 2)} kg` : '—'}</div><div className="stat-label">{t('last_weight')}</div></div>
-          <div className="stat"><div className="stat-value">{g.schedule.next ? `J${g.schedule.next.day}` : '—'}</div><div className="stat-label">{t('next_weighing')}</div><div className="stat-sub">{g.schedule.next ? d(g.schedule.next.date) : ''}</div></div>
-        </div>
         {g.schedule.overdue.length > 0 && <Notice kind="warn">{t('overdue_weighings')} : {g.schedule.overdue.map((o: any) => `J${o.day} (${d(o.date)})`).join(', ')}</Notice>}
         {chart.length > 0 && (
           <div className="chart" role="img" aria-label={t('growth_curve')}>
             <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={chart} margin={{ top: 10, right: 16, bottom: 4, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--grid)" />
-                <XAxis dataKey="age" type="number" domain={['dataMin', 'dataMax']} tickFormatter={(v) => (x.birth_date ? `J${v}` : '')} stroke="var(--muted)" />
-                <YAxis width={56} tickFormatter={(v: number) => `${num(v, 1)} kg`} stroke="var(--muted)" domain={['auto', 'auto']} />
-                <Tooltip formatter={(v: any) => [`${num(Number(v), 2)} kg`, t('weight_kg')]} labelFormatter={(_l: any, p: any) => (p?.[0] ? d(p[0].payload.date) : '')} />
-                <Line type="monotone" dataKey="weight" stroke="var(--primary)" strokeWidth={2} dot={{ r: 4 }} isAnimationActive={false} />
-              </LineChart>
+              <AreaChart data={chart} margin={{ top: 12, right: 14, bottom: 4, left: 0 }}>
+                <defs><linearGradient id="growthFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="var(--primary-bright)" stopOpacity={0.35} /><stop offset="1" stopColor="var(--primary-bright)" stopOpacity={0} /></linearGradient></defs>
+                <CartesianGrid vertical={false} stroke="var(--grid)" />
+                <XAxis dataKey="age" type="number" domain={['dataMin', 'dataMax']} tickFormatter={(v) => (x.birth_date ? `J${v}` : '')} stroke="var(--muted)" tickLine={false} axisLine={false} fontSize={12} />
+                <YAxis width={52} tickFormatter={(v: number) => `${num(v, 1)}`} stroke="var(--muted)" domain={['auto', 'auto']} tickLine={false} axisLine={false} fontSize={12} />
+                <Tooltip formatter={(v: any) => [`${num(Number(v), 2)} kg`, t('weight_kg')]} labelFormatter={(_l: any, p: any) => (p?.[0] ? d(p[0].payload.date) : '')}
+                  contentStyle={{ borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }} />
+                <Area type="monotone" dataKey="weight" stroke="var(--primary)" strokeWidth={3} fill="url(#growthFill)" dot={{ r: 5, fill: 'var(--surface)', stroke: 'var(--primary)', strokeWidth: 3 }} activeDot={{ r: 7 }} isAnimationActive={false} />
+              </AreaChart>
             </ResponsiveContainer>
           </div>
         )}
@@ -102,7 +116,9 @@ export function AnimalDetail() {
           <div>
             <h3>{t('gmq_periods')}</h3>
             {g.periods.length === 0 ? <p className="muted small">{t('missing_data')}</p> : (
-              <table className="table compact"><tbody>{g.periods.map((p: any) => <tr key={p.from}><td>{d(p.from)} → {d(p.to)}</td><td className="num">{p.days} j</td><td className="num"><strong>{num(p.gmq, 0)}</strong> {t('gmq_unit')}</td></tr>)}</tbody></table>
+              <div className="period-cards">{g.periods.map((p: any) => (
+                <div className="stat" key={p.from}><div className="stat-label">{d(p.from).slice(0, 5)} → {d(p.to).slice(0, 5)} · {p.days} j</div><div className="stat-value" style={{ color: p.gmq < 0 ? 'var(--danger)' : undefined }}>{num(p.gmq, 0)} <small className="muted" style={{ fontSize: '.72rem' }}>{t('gmq_unit')}</small></div></div>
+              ))}</div>
             )}
           </div>
           <div>
@@ -149,7 +165,7 @@ export function AnimalDetail() {
         </Card>
       )}
 
-      {weighOpen && <Modal title={`${t('nav_weigh')} — ${x.internal_id}`} onClose={() => setWeighOpen(false)}><WeighingForm animal={x} onSaved={() => { a.reload(); }} /></Modal>}
+      {weighOpen && <Modal title={`${t('nav_weigh')} — ${x.internal_id}`} onClose={() => setWeighOpen(false)}><WeighingForm animal={x} last={g.last} onSaved={() => { a.reload(); }} /></Modal>}
       {edit && <EditWeighing w={edit} onClose={() => setEdit(null)} onDone={() => { setEdit(null); a.reload(); hist.reload(); }} />}
     </div>
   );
