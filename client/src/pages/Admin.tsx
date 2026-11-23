@@ -1,6 +1,8 @@
+import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { patch, post, put } from '../api';
 import { useApp } from '../state';
+import { Icon } from '../components/Icon';
 import { Badge, Card, ErrorMsg, Field, Notice, Stat, useLoad, useSubmit } from '../components/ui';
 
 const TABS = ['admin_stats', 'users', 'farms_admin', 'referentials', 'settings', 'audit', 'outbox'] as const;
@@ -42,6 +44,40 @@ function Overview() {
   );
 }
 
+/** État d’inscription d’un utilisateur + actions administrateur (renvoi du lien, validation manuelle tracée). */
+function RegistrationState({ u, onDone }: { u: any; onDone: () => void }) {
+  const { t, dt } = useApp();
+  const [msg, setMsg] = useState<string | null>(null);
+  const resend = useSubmit(async () => { await post(`/admin/users/${u.id}/resend-verification`); setMsg(t('verif_resent')); onDone(); });
+  const verify = useSubmit(async () => {
+    const reason = window.prompt(t('verify_manual_reason'));
+    if (!reason || reason.trim().length < 5) return;
+    await post(`/admin/users/${u.id}/verify-email`, { reason }); onDone();
+  });
+  let badge: React.ReactNode = null;
+  if (!u.email_verified) badge = <Badge kind="warn">{t('rs.unverified')}</Badge>;
+  else if (u.platform_role !== 'none' && !u.registration_status) badge = null;
+  else if (!u.registration_status) badge = <Badge>{t('rs.not_started')}</Badge>;
+  else if (u.registration_status === 'draft') badge = <Badge kind="info">{t('rs.draft')}</Badge>;
+  else badge = <Link to={`/review/${u.registration_id}`}><Badge kind={u.registration_status === 'approved' ? 'ok' : u.registration_status === 'pending' || u.registration_status === 'info_requested' ? 'warn' : 'error'}>{t(`regst.${u.registration_status}`)} →</Badge></Link>;
+  return (
+    <div className="stack-sm" style={{ marginTop: '.35rem' }}>
+      {badge && <div>{badge}</div>}
+      {!u.email_verified && (
+        <>
+          <div className="small muted">{u.last_verification_sent_at ? t('verif_last_sent', { date: dt(u.last_verification_sent_at) }) : t('verif_never_sent')}</div>
+          <div className="row wrap">
+            <button className="btn small" disabled={resend.busy} onClick={() => resend.run()}><Icon name="download" size={16} style={{ transform: 'rotate(180deg)' }} />{t('verif_resend')}</button>
+            <button className="btn small" disabled={verify.busy} onClick={() => verify.run()}><Icon name="check" size={16} />{t('verif_manual')}</button>
+          </div>
+        </>
+      )}
+      {msg && <div className="small" style={{ color: 'var(--ok)' }}>{msg}</div>}
+      <ErrorMsg error={resend.error || verify.error} />
+    </div>
+  );
+}
+
 function Users() {
   const { t, d, me } = useApp();
   const [q, setQ] = useState('');
@@ -57,7 +93,7 @@ function Users() {
         <tbody>{(u.data ?? []).map((x) => (
           <tr key={x.id}>
             <td>{x.first_name} {x.last_name}<div className="small muted">{d(x.created_at)}</div></td>
-            <td>{x.email} {!x.email_verified && <Badge kind="warn">✉?</Badge>}</td>
+            <td><div>{x.email}</div><RegistrationState u={x} onDone={() => u.reload()} /></td>
             <td><select disabled={x.id === me?.user?.id} value={x.platform_role} onChange={(e) => s.run(x.id, { platform_role: e.target.value })} aria-label={t('platform_role')}>{['none', 'validator', 'analyst', 'admin'].map((r) => <option key={r} value={r}>{t(`prole.${r}`)}</option>)}</select></td>
             <td>{x.platform_role === 'validator' ? (
               <div className="row wrap">{(terr.data ?? []).map((tt) => (

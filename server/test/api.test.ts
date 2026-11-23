@@ -376,6 +376,38 @@ describe('Exploitation propre de l’administrateur', () => {
   });
 });
 
+describe('Administration : suivi des inscriptions', () => {
+  it('état d’inscription, renvoi du lien et validation manuelle de l’adresse', async () => {
+    const u = agent(app, 'unverified@test.org');
+    await post(u, '/api/auth/register', { email: 'unverified@test.org', password: 'motdepasse-solide-1', first_name: 'Non', last_name: 'Verifie' });
+    const list = await admin.get('/api/admin/users?q=unverified');
+    const row = list.body.find((x: any) => x.email === 'unverified@test.org');
+    expect(row.email_verified).toBe(false);
+    expect(row.registration_status).toBeNull();
+    expect(row.last_verification_sent_at).not.toBeNull();
+    // renvoi du lien : nouveau jeton utilisable
+    const before = await lastToken('unverified@test.org');
+    expect((await post(admin, `/api/admin/users/${row.id}/resend-verification`)).status).toBe(200);
+    expect(await lastToken('unverified@test.org')).not.toBe(before);
+    // réservé aux administrateurs
+    const other = await registerVerified(app, 'notadmin2@test.org');
+    expect((await post(other, `/api/admin/users/${row.id}/verify-email`, { reason: 'test test' })).status).toBe(403);
+    // motif obligatoire
+    expect((await post(admin, `/api/admin/users/${row.id}/verify-email`, {})).status).toBe(400);
+    expect((await post(admin, `/api/admin/users/${row.id}/verify-email`, { reason: 'Confirmé par téléphone' })).status).toBe(200);
+    expect((await post(admin, `/api/admin/users/${row.id}/verify-email`, { reason: 'Confirmé par téléphone' })).body.error).toBe('email_already_verified');
+    // l’utilisateur peut désormais soumettre son dossier
+    expect((await u.get('/api/farms')).status).toBe(200);
+    const s = await put(u, '/api/registration/mine?submit=1', reqBody({ farm_name: 'Ferme vérifiée' }));
+    expect(s.body.status).toBe('pending');
+    const after = (await admin.get('/api/admin/users?q=unverified')).body[0];
+    expect(after.registration_status).toBe('pending');
+    expect(after.registration_id).toBe(s.body.id);
+    const log = await pool.query(`select details from audit_logs where action = 'admin.email_verified_manually' and resource_id = $1`, [row.id]);
+    expect(log.rows[0].details.reason).toBe('Confirmé par téléphone');
+  });
+});
+
 describe('Droits RGPD', () => {
   it('export des données personnelles et suppression du compte', async () => {
     const u = await registerVerified(app, 'rgpd@test.org');

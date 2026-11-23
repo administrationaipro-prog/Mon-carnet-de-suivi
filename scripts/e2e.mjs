@@ -241,6 +241,27 @@ try {
   await shot(admin, '09-audit');
   log('Journal d’audit consultable par l’administrateur');
 
+  // Suivi des inscriptions : éleveur qui n’a pas vérifié son adresse
+  const lateEmail = `retard-${RUN}@example.org`;
+  const reg = await fetch(`${BASE}/api/auth/register`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-requested-with': 'carnet' },
+    body: JSON.stringify({ email: lateEmail, password: 'Mouton-Retard-2026', first_name: 'Paul', last_name: 'Retard', lang: 'fr' }) });
+  if (!reg.ok) throw new Error('inscription impossible : ' + reg.status);
+  await admin.goto(`${BASE}/admin`);
+  await admin.getByRole('tab', { name: 'Utilisateurs' }).click();
+  await admin.getByLabel('Rechercher').fill('retard-' + RUN);
+  const row = admin.locator('tr', { hasText: lateEmail });
+  await row.getByText('Adresse non vérifiée').waitFor();
+  await row.getByText(/Lien envoyé le/).waitFor();
+  await row.getByRole('button', { name: 'Renvoyer le lien' }).click();
+  await expectText(admin, 'Nouveau lien de vérification envoyé');
+  admin.once('dialog', (d) => d.accept('Adresse confirmée par téléphone'));
+  await row.getByRole('button', { name: 'Valider l’adresse' }).click();
+  await row.getByText('Dossier non commencé').waitFor();
+  await shot(admin, '10-suivi-inscriptions');
+  const ver = await db.query('select email_verified_at from users where email = $1', [lateEmail]);
+  if (!ver.rows[0].email_verified_at) throw new Error('adresse non validée');
+  log('Administration : adresse non vérifiée signalée, lien renvoyé, validation manuelle tracée');
+
   // Exploitation propre de l’administrateur
   await admin.goto(BASE);
   await admin.getByText('Effectif actif').or(admin.getByRole('button', { name: /Créer mon exploitation/ })).first().waitFor();
@@ -254,7 +275,7 @@ try {
   }
   await admin.getByRole('link', { name: /Mon cheptel/ }).first().waitFor();
   await admin.getByRole('link', { name: /Administration/ }).first().waitFor();
-  await shot(admin, '10-admin-exploitation');
+  await shot(admin, '11-admin-exploitation');
   log('Administrateur : « Créer mon exploitation » → espace éleveur + administration');
 
   // Application installable (PWA) + page d’aide accessible sans compte
