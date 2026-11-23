@@ -294,6 +294,10 @@ describe('Animaux, pesées et GMQ (§9, §15)', () => {
     const dash = await F.get(`/api/farms/${F.farmId}/dashboard`);
     expect(dash.body.animals.active).toBeGreaterThan(0);
     expect(dash.body.alerts.some((x: any) => x.type === 'withdrawal_period')).toBe(true);
+    // GMQ du troupeau : animaux avec au moins 2 pesées seulement, série de 8 semaines sans valeur inventée
+    expect(dash.body.growth.animals_measured).toBe(1);
+    expect(dash.body.growth.weekly).toHaveLength(8);
+    expect(dash.body.growth.weekly.every((w: any) => w.gmq === null ? w.n === 0 : w.n > 0)).toBe(true);
   });
   it('export CSV fidèle aux données enregistrées', async () => {
     const r = await F.get(`/api/farms/${F.farmId}/export/weighings.csv?lang=fr`);

@@ -5,15 +5,28 @@ import { useApp } from '../state';
 import { ErrorMsg, Field, Notice, useSubmit } from '../components/ui';
 import { LangSwitch } from '../components/Layout';
 import { InstallButton } from '../components/Install';
+import { Icon, Sheep } from '../components/Icon';
 
 export function AuthShell({ title, children }: { title: string; children: React.ReactNode }) {
   const { t } = useApp();
   return (
     <div className="auth-wrap">
-      <div className="auth-card">
-        <div className="auth-brand"><img src="/icon.svg" alt="" width={44} height={44} /><div><strong>{t('app_name')}</strong><div className="muted small">{t('app_tagline')}</div></div><LangSwitch /></div>
-        <h1>{title}</h1>
-        {children}
+      <div className="auth-layout">
+        <div className="auth-pitch">
+          <div className="logo"><Sheep size={54} wool="var(--primary)" /></div>
+          <h2>{t('pitch_title_1')}<br />{t('pitch_title_2')}</h2>
+          <p>{t('pitch_text')}</p>
+          <div className="chips">
+            <span className="chip"><Icon name="check" size={14} stroke={2.6} />{t('pitch_offline')}</span>
+            <span className="chip"><Icon name="check" size={14} stroke={2.6} />{t('pitch_lang')}</span>
+            <span className="chip"><Icon name="check" size={14} stroke={2.6} />{t('pitch_private')}</span>
+          </div>
+        </div>
+        <div className="auth-card">
+          <div className="auth-brand"><img src="/icon.svg" alt="" width={44} height={44} style={{ borderRadius: 14 }} /><div><strong>{t('app_name')}</strong><div className="muted small">{t('app_tagline')}</div></div><LangSwitch /></div>
+          <h1>{title}</h1>
+          {children}
+        </div>
       </div>
     </div>
   );

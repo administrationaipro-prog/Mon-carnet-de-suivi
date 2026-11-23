@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useApp } from '../state';
 import { canPrompt, isStandalone, platform, promptInstall, snapshot, subscribeInstall } from '../install';
 import { Card, Notice } from './ui';
+import { Icon } from './Icon';
 
 function useInstallState() {
   useSyncExternalStore(subscribeInstall, snapshot);
@@ -15,8 +16,8 @@ export function InstallButton({ block = false, small = false }: { block?: boolea
   const s = useInstallState();
   if (s.standalone) return null;
   const cls = `btn ${small ? 'small' : ''} ${block ? 'block' : ''}`;
-  if (s.canPrompt) return <button type="button" className={`${cls} primary`} onClick={() => promptInstall()}>📲 {t('install_app')}</button>;
-  return <Link className={cls} to="/installer">📲 {t('install_app')}</Link>;
+  if (s.canPrompt) return <button type="button" className={`${cls} primary`} onClick={() => promptInstall()}><Icon name="download" size={18} />{t('install_app')}</button>;
+  return <Link className={cls} to="/installer"><Icon name="download" size={18} />{t('install_app')}</Link>;
 }
 
 /** Page d’aide à l’installation (accessible sans compte). */
@@ -30,7 +31,7 @@ export function InstallPage({ embedded = false }: { embedded?: boolean }) {
       {s.standalone ? <Notice kind="ok">{t('install_done')}</Notice> : (
         <>
           <p>{t('install_intro')}</p>
-          {s.canPrompt && <button className="btn primary block" onClick={() => promptInstall()}>📲 {t('install_app')}</button>}
+          {s.canPrompt && <button className="btn primary block" onClick={() => promptInstall()}><Icon name="download" size={18} />{t('install_app')}</button>}
           <Card title={`🤖 ${t('install_android')}`} className={s.platform === 'android' ? 'highlight' : ''}>
             <ol className="steps">
               <li>{t('install_android_1')}</li>

@@ -1,5 +1,5 @@
 // Service worker : coquille applicative hors connexion + lecture des données en cache (réseau d’abord).
-const VERSION = 'carnet-v1';
+const VERSION = 'carnet-v2';
 const SHELL = ['/', '/manifest.webmanifest', '/icon.svg'];
 
 self.addEventListener('install', (e) => {

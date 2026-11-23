@@ -55,8 +55,37 @@ farmsRouter.get('/:farmId/dashboard', h(async (c) => {
      (select 'health' as kind, h.date, a.id, coalesce(a.name, a.internal_id), h.type from health_events h join animals a on a.id = h.animal_id
        where h.farm_id = $1 order by h.date desc limit 5)
      order by date desc limit 10`, [f]);
-  return { animals: counts.rows[0], weighings: { total: w.rows[0].n, last_date: w.rows[0].last, last_30_days: w30.rows[0].n }, recent: recent.rows, alerts: await alerts(c, f) };
+  return { animals: counts.rows[0], weighings: { total: w.rows[0].n, last_date: w.rows[0].last, last_30_days: w30.rows[0].n },
+    growth: await growthSummary(c, f), recent: recent.rows, alerts: await alerts(c, f) };
 }));
+
+/**
+ * GMQ du troupeau : moyenne des GMQ par période (pesées consécutives) des animaux présents.
+ * Série hebdomadaire sur 8 semaines (semaine = date de fin de période) et tendance 30 j vs 30 j précédents.
+ * Aucune valeur n’est inventée : une semaine sans période mesurée vaut null.
+ */
+async function growthSummary(c: Ctx, farmId: string) {
+  const { rows } = await c.db.query(
+    `select coalesce(json_agg(json_build_object('date', w.date, 'weight_kg', w.weight_kg) order by w.date) filter (where w.id is not null), '[]') as ws
+       from animals a left join weighings w on w.animal_id = a.id where a.farm_id = $1 and a.status = 'active' group by a.id`, [farmId]);
+  const t = today();
+  const periods = rows.flatMap((r) => gmqSeries(r.ws).periods);
+  const avg = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null);
+  const inRange = (from: string, to: string) => periods.filter((p) => p.to > from && p.to <= to).map((p) => p.gmq);
+  const weekly: { week_end: string; gmq: number | null; n: number }[] = [];
+  for (let i = 7; i >= 0; i--) {
+    const end = addDays(t, -7 * i), start = addDays(end, -7);
+    const xs = inRange(start, end);
+    weekly.push({ week_end: end, gmq: avg(xs), n: xs.length });
+  }
+  const last30 = inRange(addDays(t, -30), t), prev30 = inRange(addDays(t, -60), addDays(t, -30));
+  const overall = rows.map((r) => gmqSeries(r.ws).overall).filter((x): x is number => x !== null);
+  const cur = avg(last30), prev = avg(prev30);
+  return {
+    mean_overall: avg(overall), animals_measured: overall.length,
+    last_30: cur, last_30_n: last30.length, trend: cur !== null && prev !== null ? cur - prev : null, weekly,
+  };
+}
 
 async function alerts(c: Ctx, farmId: string) {
   const protocol = await getSetting<number[]>(c.db, 'weighing_protocol_days', [0, 7, 14, 21, 30, 45, 60, 90, 120]);
