@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { h, parse, requirePlatform } from '../http.js';
-import { bad, notFound } from '../lib/errors.js';
+import { bad, notFound, conflict } from '../lib/errors.js';
+import { issueEmailToken } from './auth.js';
 import { audit } from '../lib/audit.js';
 import { config } from '../config.js';
-import { sendMail, mailEnabled } from '../lib/mail.js';
+import { sendMail, mailEnabled, notify } from '../lib/mail.js';
 
 export const refRouter = Router();
 refRouter.get('/territories', h(async (c) => (await c.db.query('select * from territories order by active desc, name_fr')).rows, { auth: 'none' }));
@@ -18,9 +19,42 @@ adminRouter.get('/users', h(async (c) => {
   const { rows } = await c.db.query(
     `select u.id, u.email, u.first_name, u.last_name, u.lang, u.status, u.platform_role, u.mfa_enabled, u.created_at, (u.email_verified_at is not null) email_verified,
             coalesce((select array_agg(territory_code) from validator_territories v where v.user_id = u.id), '{}') as territories,
-            (select count(*)::int from memberships m where m.user_id = u.id and m.status = 'active') as farms
-       from users u where u.status <> 'deleted' and (u.email ilike $1 or u.last_name ilike $1 or u.first_name ilike $1) order by u.created_at desc limit 500`, [q]);
+            (select count(*)::int from memberships m where m.user_id = u.id and m.status = 'active') as farms,
+            r.id as registration_id, r.status as registration_status,
+            (select max(o.created_at) from outbox_emails o where o.to_email = u.email and o.subject in ('Vérifiez votre adresse courriel', 'Verify your email address')) as last_verification_sent_at
+       from users u
+       left join lateral (select id, status from registration_requests rr where rr.user_id = u.id order by rr.created_at desc limit 1) r on true
+      where u.status <> 'deleted' and (u.email ilike $1 or u.last_name ilike $1 or u.first_name ilike $1) order by u.created_at desc limit 500`, [q]);
   return rows;
+}));
+
+async function loadUnverified(c: Parameters<Parameters<typeof h>[0]>[0], id: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw notFound();
+  const { rows } = await c.db.query(`select id, email, lang, email_verified_at from users where id = $1 and status = 'active'`, [id]);
+  if (!rows[0]) throw notFound();
+  if (rows[0].email_verified_at) throw conflict('email_already_verified');
+  return rows[0];
+}
+
+/** Renvoie le lien de vérification d’adresse à un utilisateur qui ne l’a pas encore utilisé. */
+adminRouter.post('/users/:id/resend-verification', h(async (c) => {
+  requirePlatform(c, 'admin');
+  const u = await loadUnverified(c, c.req.params.id as string);
+  await issueEmailToken(c, u);
+  await audit(c.db, { actor: c.user.id, action: 'admin.verification_resent', resource: 'user', resourceId: u.id, ip: c.ip });
+  return { ok: true };
+}));
+
+/** Validation manuelle de l’adresse (personne connue, adresse confirmée par un autre moyen) : motif obligatoire, tracée. */
+adminRouter.post('/users/:id/verify-email', h(async (c) => {
+  requirePlatform(c, 'admin');
+  const { reason } = parse(z.object({ reason: z.string().trim().min(5).max(500) }), c.req.body);
+  const u = await loadUnverified(c, c.req.params.id as string);
+  await c.db.query('update users set email_verified_at = now() where id = $1', [u.id]);
+  await c.db.query(`update auth_tokens set used_at = now() where user_id = $1 and kind = 'verify_email' and used_at is null`, [u.id]);
+  await audit(c.db, { actor: c.user.id, action: 'admin.email_verified_manually', resource: 'user', resourceId: u.id, details: { reason }, ip: c.ip });
+  await notify(c.db, u.id, 'email_verified_by_admin', {});
+  return { ok: true };
 }));
 
 adminRouter.patch('/users/:id', h(async (c) => {
