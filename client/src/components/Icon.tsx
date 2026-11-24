@@ -33,6 +33,7 @@ const P: Record<string, string> = {
   trend: 'M3 17l6-6 4 4 8-8M15 7h6v6',
   file: 'M6 3h8l5 5v13H6zM14 3v5h5',
   x: 'M6 6l12 12M18 6L6 18',
+  dna: 'M8 3c0 5 8 5 8 9s-8 4-8 9M16 3c0 5-8 5-8 9s8 4 8 9M9.5 6.5h5M9.5 17.5h5',
 };
 
 export type IconName = keyof typeof P;

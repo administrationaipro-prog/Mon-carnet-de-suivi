@@ -5,6 +5,8 @@ import { HttpError, bad, notFound, conflict } from '../lib/errors.js';
 import { audit, recordHistory } from '../lib/audit.js';
 import { getSetting } from '../db.js';
 import { checkWeighing, gmqSeries, weightAtAge, weighingStatus, round } from '../lib/indicators.js';
+import { inbreedingVerdict, toPercent } from '../lib/pedigree.js';
+import { loadPedigree, inbreedingLimits } from '../lib/pedigreeDb.js';
 
 export const animalsRouter = Router({ mergeParams: true });
 const fid = (c: Ctx) => c.req.params.farmId as string;
@@ -70,6 +72,25 @@ async function validateAnimal(c: Ctx, b: AnimalIn, selfId?: string) {
   }
 }
 
+/**
+ * Refuse l'enregistrement d'un animal dont la consanguinité (parenté père × mère) dépasse la limite fixée.
+ * Contrôle aussi qu'on ne crée pas de boucle dans la généalogie. Ne s'applique en modification que si les parents changent.
+ */
+async function enforceInbreeding(c: Ctx, b: AnimalIn, selfId?: string, before?: { sire_id: string | null; dam_id: string | null }) {
+  if (!b.sire_id || !b.dam_id) return;
+  if (before && before.sire_id === b.sire_id && before.dam_id === b.dam_id) return;
+  const ped = await loadPedigree(c.db, fid(c));
+  try {
+    if (selfId) for (const p of [b.sire_id, b.dam_id]) if (ped.ancestors(p).has(selfId)) throw bad('pedigree_cycle');
+    const f = ped.kinship(b.sire_id, b.dam_id);
+    const { warn, max } = await inbreedingLimits(c.db);
+    if (inbreedingVerdict(f, warn, max) === 'refused') throw new HttpError(400, 'inbreeding_limit_exceeded', { inbreeding_percent: toPercent(f), limit_percent: max });
+  } catch (e: any) {
+    if (e?.message === 'pedigree_cycle') throw bad('pedigree_cycle');
+    throw e;
+  }
+}
+
 async function saveBirth(c: Ctx, animalId: string, birth: AnimalIn['birth']) {
   if (!birth) return;
   await c.db.query(
@@ -113,6 +134,7 @@ animalsRouter.post('/animals', h(async (c) => {
   await validateAnimal(c, b);
   const dup = await c.db.query('select 1 from animals where farm_id = $1 and internal_id = $2', [fid(c), b.internal_id]);
   if (dup.rowCount) throw conflict('internal_id_taken');
+  await enforceInbreeding(c, b);
   const { rows } = await c.db.query(
     `insert into animals (farm_id, internal_id, official_id, name, sex, birth_date, breed_code, breed_declared, objective, status, exit_date, exit_reason,
        sire_id, dam_id, sire_external, dam_external, parentage_source, parentage_certainty, lot_id, notes)
@@ -147,8 +169,20 @@ animalsRouter.get('/animals/:id', h(async (c) => {
   if (birth.rows[0]?.birth_weight_kg && std.j0 === undefined) (std as any).j0 = birth.rows[0].birth_weight_kg;
   const expected = ['official_id', 'birth_date', 'breed_code', 'sire_id|sire_external', 'dam_id|dam_external'];
   const filled = expected.filter((k) => k.split('|').some((f) => a[f] !== null && a[f] !== '')).length + (ws.rows.length > 0 ? 1 : 0) + (birth.rows[0] ? 1 : 0);
+  // Consanguinité : calculable seulement si père ET mère sont connus dans le cheptel ; jamais « devinée »
+  let inbreeding: any = null;
+  try {
+    const ped = await loadPedigree(c.db, fid(c));
+    const lim = await inbreedingLimits(c.db);
+    const computable = !!(a.sire_id && a.dam_id);
+    const fv = computable ? ped.inbreeding(a.id) : null;
+    inbreeding = {
+      computable, coefficient_percent: fv === null ? null : toPercent(fv), level: fv === null ? null : inbreedingVerdict(fv, lim.warn, lim.max),
+      limit_percent: lim.max, warn_percent: lim.warn, generations_known: ped.depth(a.id), completeness: round(ped.completeness(a.id, 3), 2),
+    };
+  } catch { inbreeding = null; }
   return {
-    ...a, breed: breed.rows[0] ?? null, birth: birth.rows[0] ?? null, lot: lot.rows[0] ?? null,
+    ...a, inbreeding, breed: breed.rows[0] ?? null, birth: birth.rows[0] ?? null, lot: lot.rows[0] ?? null,
     sire: parents.rows.find((p) => p.id === a.sire_id) ?? null, dam: parents.rows.find((p) => p.id === a.dam_id) ?? null,
     grandparents: gp.rows, offspring: offspring.rows,
     weighings: ws.rows, growth: { ...series, standard_weights: std, schedule: weighingStatus(a.birth_date,
@@ -165,6 +199,7 @@ animalsRouter.put('/animals/:id', h(async (c) => {
   const before = await getAnimal(c, c.req.params.id as string);
   const b = parse(zAnimal, c.req.body);
   await validateAnimal(c, b, before.id);
+  await enforceInbreeding(c, b, before.id, before);
   const firstW = await c.db.query('select min(date) d from weighings where animal_id = $1', [before.id]);
   if (b.birth_date && firstW.rows[0].d && firstW.rows[0].d < b.birth_date) throw bad('weighing_before_birth');
   const { rows } = await c.db.query(

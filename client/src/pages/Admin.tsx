@@ -202,6 +202,7 @@ function Settings() {
       aggregation_min_farms: Number(f.aggregation_min_farms), consent_policy_version: String(f.consent_policy_version),
       weighing_protocol_days: String(f.weighing_protocol_days).split(',').map((x) => Number(x.trim())).filter((x) => Number.isFinite(x)),
       weighing_tolerance_days: Number(f.weighing_tolerance_days), interpolation_max_gap_days: Number(f.interpolation_max_gap_days),
+      inbreeding_warn_percent: Number(String(f.inbreeding_warn_percent).replace(',', '.')), inbreeding_max_percent: Number(String(f.inbreeding_max_percent).replace(',', '.')),
     });
     setOk(true); s.reload();
   });
@@ -214,8 +215,11 @@ function Settings() {
           <Field label={t('consent_version')}><input value={f.consent_policy_version} onChange={(e) => setF({ ...f, consent_policy_version: e.target.value })} /></Field>
           <Field label={t('protocol_days')}><input value={f.weighing_protocol_days} onChange={(e) => setF({ ...f, weighing_protocol_days: e.target.value })} /></Field>
           <Field label={t('tolerance_days')}><input type="number" min={0} max={15} value={f.weighing_tolerance_days} onChange={(e) => setF({ ...f, weighing_tolerance_days: e.target.value })} /></Field>
+          <Field label={t('inb_warn_setting')}><input type="number" step="0.25" min={1} max={25} value={f.inbreeding_warn_percent ?? ''} onChange={(e) => setF({ ...f, inbreeding_warn_percent: e.target.value })} /></Field>
+          <Field label={t('inb_max_setting')}><input type="number" step="0.25" min={3} max={25} value={f.inbreeding_max_percent ?? ''} onChange={(e) => setF({ ...f, inbreeding_max_percent: e.target.value })} /></Field>
           <Field label={t('interp_gap')}><input type="number" min={7} max={90} value={f.interpolation_max_gap_days} onChange={(e) => setF({ ...f, interpolation_max_gap_days: e.target.value })} /></Field>
         </div>
+        <p className="small muted" style={{ margin: 0 }}>{t('inb_settings_hint')}</p>
         <ErrorMsg error={sv.error} />
         {ok && <Notice kind="ok">{t('saved')}</Notice>}
         <button className="btn primary">{t('save')}</button>

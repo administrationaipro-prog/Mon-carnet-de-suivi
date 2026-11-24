@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { h, parse, requirePlatform } from '../http.js';
 import { bad, notFound, conflict } from '../lib/errors.js';
 import { issueEmailToken } from './auth.js';
+import { inbreedingLimits } from '../lib/pedigreeDb.js';
 import { audit } from '../lib/audit.js';
 import { config } from '../config.js';
 import { sendMail, mailEnabled, notify } from '../lib/mail.js';
@@ -133,10 +134,16 @@ const zSettings = z.object({
   weighing_protocol_days: z.array(z.number().int().min(0).max(730)).min(1).max(30).optional(),
   weighing_tolerance_days: z.number().int().min(0).max(15).optional(),
   interpolation_max_gap_days: z.number().int().min(7).max(90).optional(),
+  inbreeding_warn_percent: z.number().min(1).max(25).optional(),
+  inbreeding_max_percent: z.number().min(3).max(25).optional(),
 });
 adminRouter.put('/settings', h(async (c) => {
   requirePlatform(c, 'admin');
   const b = parse(zSettings, c.req.body);
+  if (b.inbreeding_warn_percent !== undefined || b.inbreeding_max_percent !== undefined) {
+    const cur = await inbreedingLimits(c.db);
+    if ((b.inbreeding_warn_percent ?? cur.warn) >= (b.inbreeding_max_percent ?? cur.max)) throw bad('inbreeding_limits_inconsistent');
+  }
   for (const [k, v] of Object.entries(b)) {
     if (v === undefined) continue;
     await c.db.query('insert into settings (key, value) values ($1,$2) on conflict (key) do update set value = excluded.value', [k, JSON.stringify(v)]);

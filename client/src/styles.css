@@ -287,3 +287,24 @@ details.more summary::-webkit-details-marker { display: none; }
 @media (min-width: 640px) { .modal { border-radius: 26px; } }
 .install-page .card h2 { font-size: 1rem; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+.icon-btn.small { width: 36px; height: 36px; border-radius: 11px; }
+tr.row-action { cursor: pointer; }
+tr.row-action:active td { background: var(--primary-soft); }
+
+.gauge-wrap { padding-bottom: 1.6rem; position: relative; }
+.gauge { position: relative; height: 14px; border-radius: 9px; opacity: .92; }
+.gauge-marker { position: absolute; top: -5px; width: 6px; height: 24px; margin-left: -3px; border-radius: 4px; background: var(--text); border: 2px solid var(--surface); box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.gauge-ticks { position: relative; height: 1.4rem; margin-top: .45rem; font-size: .72rem; color: var(--muted); font-weight: 650; }
+.gauge-ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.gauge-ticks span:first-child { transform: translateX(-70%); }
+.gauge-ticks span:last-child { transform: translateX(-30%); }
+.verdict { border-radius: 24px; padding: 1.1rem 1.2rem; color: #fff; position: relative; overflow: hidden; }
+.verdict.ok { background: var(--hero); } .verdict.warning { background: linear-gradient(150deg, #A9530F, #EE8A3C); } .verdict.refused { background: linear-gradient(150deg, #8F2A22, #C9453B); }
+.verdict .v-big { font-size: 3rem; font-weight: 800; letter-spacing: -.04em; line-height: 1.05; }
+.verdict .v-title { font-weight: 800; font-size: 1.05rem; }
+.verdict .v-sub { opacity: .9; font-size: .85rem; }
+.compare { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 0; font-size: .9rem; align-items: center; }
+.compare .h { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; padding-bottom: .3rem; border-bottom: 1px solid var(--border); }
+.compare > div { padding: .45rem 0; border-bottom: 1px solid var(--border); } .compare .v { text-align: right; font-weight: 750; font-variant-numeric: tabular-nums; padding-left: .6rem; }
+.compare .l { color: var(--muted); }

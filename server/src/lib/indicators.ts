@@ -108,6 +108,13 @@ export function weighingStatus(birthDate: string | null, ws: Weighing[], protoco
   return { next, overdue: overdue.filter((x) => daysBetween(x.date, today) <= 60) };
 }
 
+/** Intervalle de confiance de Wilson à 95 % pour une proportion k/n (à afficher avec n : peu de données = intervalle large). */
+export function wilson(k: number, n: number, z = 1.96): { low: number; high: number } | null {
+  if (n <= 0) return null;
+  const p = k / n, d = 1 + (z * z) / n, c = p + (z * z) / (2 * n), m = z * Math.sqrt((p * (1 - p) + (z * z) / (4 * n)) / n);
+  return { low: round((c - m) / d, 3), high: round((c + m) / d, 3) };
+}
+
 export const ratio = (num: number, den: number) => (den > 0 ? round(num / den, 4) : null);
 export function round(x: number, d = 2) { const f = 10 ** d; return Math.round(x * f) / f; }
 export function median(xs: number[]): number | null {

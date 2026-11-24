@@ -10,6 +10,7 @@ import { AnimalDetail } from './pages/AnimalDetail';
 import { Weigh } from './pages/Weigh';
 import { Feeding, Health, Repro, Parcels } from './pages/Journals';
 import { Analytics } from './pages/Analytics';
+import { Mating } from './pages/Mating';
 import { Members, Collective } from './pages/Farm';
 import { Account, Notifications } from './pages/Account';
 import { ReviewList, ReviewDetail } from './pages/Review';
@@ -59,6 +60,7 @@ function Routed() {
         <Route path="/feeding" element={needFarm(<Feeding />)} />
         <Route path="/health" element={needFarm(<Health />)} />
         <Route path="/repro" element={needFarm(<Repro />)} />
+        <Route path="/simulateur" element={needFarm(<Mating />)} />
         <Route path="/parcels" element={needFarm(<Parcels />)} />
         <Route path="/members" element={needFarm(<Members />)} />
         <Route path="/collective" element={farm || role === 'analyst' || role === 'admin' ? <Collective /> : <Navigate to="/" replace />} />

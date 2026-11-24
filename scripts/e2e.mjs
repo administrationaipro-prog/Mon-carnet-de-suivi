@@ -227,6 +227,58 @@ try {
   await shot(desk, '07-collectif');
   log('Consentement explicite enregistré ; cellule < 5 exploitations masquée');
 
+  // ---------- Consanguinité : refus d’enregistrement, fiche et simulateur ----------
+  const post = (path, body) => desk.evaluate(async ([p, b]) => {
+    const r = await fetch('/api' + p, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-requested-with': 'carnet' }, body: JSON.stringify(b) });
+    return { status: r.status, body: await r.json().catch(() => ({})) };
+  }, [path, body]);
+  const farmId = await desk.evaluate(async () => (await (await fetch('/api/farms', { credentials: 'same-origin' })).json())[0].id);
+  const mk = (id, sex, extra = {}) => post(`/farms/${farmId}/animals`, { internal_id: id, sex, birth_date: '2024-01-01', breed_code: 'BLACKBELLY', ...extra });
+  const pere = (await mk('PERE-X', 'M')).body, mere = (await mk('MERE-X', 'F')).body;
+  const frere = (await mk('FRERE-X', 'M', { sire_id: pere.id, dam_id: mere.id, birth_date: '2025-01-01' })).body;
+  const soeur = (await mk('SOEUR-X', 'F', { sire_id: pere.id, dam_id: mere.id, birth_date: '2025-01-01' })).body;
+  const refus = await mk('AGNEAU-X', 'M', { sire_id: frere.id, dam_id: soeur.id, birth_date: '2026-01-01' });
+  if (refus.status !== 400 || refus.body.error !== 'inbreeding_limit_exceeded') throw new Error('frère × sœur aurait dû être refusé : ' + JSON.stringify(refus));
+  // formulaire : aperçu et blocage de l’enregistrement
+  await desk.goto(`${BASE}/herd/new`);
+  await desk.getByLabel('Identifiant interne').fill('AGNEAU-Y');
+  const selFor = (txt) => desk.locator('select', { has: desk.locator('option', { hasText: txt }) }).first();
+  await selectByText(selFor('FRERE-X'), 'FRERE-X');
+  await selectByText(selFor('SOEUR-X'), 'SOEUR-X');
+  await expectText(desk, 'Consanguinité de cet agneau : 25 %');
+  await expectText(desk, 'Enregistrement impossible');
+  if (!(await desk.getByRole('button', { name: 'Enregistrer' }).isDisabled())) throw new Error('le bouton Enregistrer aurait dû être bloqué');
+  // fiche : taux calculé automatiquement
+  await desk.goto(`${BASE}/herd/${frere.id}`);
+  await expectText(desk, 'Coefficient de consanguinité (F)');
+  await expectText(desk, '0 %');
+  // simulateur
+  await desk.goto(`${BASE}/simulateur?ram=${frere.id}&ewe=${soeur.id}`);
+  await expectText(desk, 'Saillie déconseillée');
+  await expectText(desk, '25 %');
+  await expectText(desk, 'Ancêtres communs');
+  await expectText(desk, 'Performances observées');
+  await shot(desk, '08-simulateur');
+  log('Consanguinité : frère × sœur refusé (25 %), taux sur la fiche, simulateur de saillie');
+
+  // ---------- Correction d’une pesée sur téléphone : suppression d’un doublon ----------
+  const b1 = await desk.evaluate(async (fId) => (await (await fetch(`/api/farms/${fId}/animals?q=B1`, { credentials: 'same-origin' })).json())[0], farmId);
+  const dup = await post(`/farms/${farmId}/animals/${b1.id}/weighings`, { date: '2026-11-14', weight_kg: 12.81, confirm: true });
+  if (dup.status !== 200) throw new Error('doublon non créé : ' + JSON.stringify(dup));
+  await desk.setViewportSize({ width: 390, height: 844 });
+  await desk.goto(`${BASE}/herd/${b1.id}`);
+  const ligne = desk.locator('tr', { hasText: '14/11/2026' }).filter({ hasText: '12,81' });
+  await ligne.getByRole('button', { name: /^Corriger/ }).click();
+  const dlg = desk.getByRole('dialog');
+  if (!(await dlg.getByRole('button', { name: 'Supprimer' }).isDisabled())) throw new Error('Supprimer devrait être grisé sans motif');
+  await dlg.getByRole('button', { name: 'Doublon' }).click();
+  await dlg.getByRole('button', { name: 'Supprimer' }).click();
+  await ligne.waitFor({ state: 'detached' });
+  await expectText(desk, '13,29');
+  await shot(desk, '08b-pesee-supprimee-mobile');
+  await desk.setViewportSize({ width: 1366, height: 900 });
+  log('Pesée en doublon supprimée depuis un téléphone (crayon visible, motif rapide)');
+
   await desk.goto(`${BASE}/herd`);
   await desk.getByRole('button', { name: 'EN', exact: true }).click();
   await expectText(desk, 'My flock');
@@ -236,6 +288,8 @@ try {
 
   // Journal d’audit côté administrateur
   await admin.goto(`${BASE}/admin`);
+  await admin.getByRole('tab', { name: 'Paramètres' }).click();
+  await expectText(admin, 'Limite de refus de consanguinité');
   await admin.getByRole('tab', { name: 'Journal d’audit' }).click();
   await expectText(admin, 'registration.approve');
   await shot(admin, '09-audit');
