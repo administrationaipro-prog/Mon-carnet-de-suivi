@@ -279,6 +279,18 @@ try {
   await desk.setViewportSize({ width: 1366, height: 900 });
   log('Pesée en doublon supprimée depuis un téléphone (crayon visible, motif rapide)');
 
+  // ---------- Aucune page ne doit déborder horizontalement sur un petit téléphone ----------
+  await desk.setViewportSize({ width: 360, height: 740 });
+  const overflowing = [];
+  for (const path of ['/', '/herd', `/herd/${b1.id}`, '/herd/new', '/weigh', '/analytics', '/feeding', '/health', '/repro', '/simulateur', '/parcels', '/members', '/collective', '/account', '/notifications', '/installer']) {
+    await desk.goto(BASE + path); await desk.waitForTimeout(400);
+    const extra = await desk.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    if (extra > 1) overflowing.push(`${path} (+${extra}px)`);
+  }
+  await desk.setViewportSize({ width: 1366, height: 900 });
+  if (overflowing.length) throw new Error('Pages qui débordent sur téléphone : ' + overflowing.join(', '));
+  log('Aucune page ne déborde horizontalement sur un téléphone de 360 px');
+
   await desk.goto(`${BASE}/herd`);
   await desk.getByRole('button', { name: 'EN', exact: true }).click();
   await expectText(desk, 'My flock');
