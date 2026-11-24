@@ -159,8 +159,8 @@ function Referentials() {
     <div className="grid2">
       <Card title={t('territories')}>
         <ErrorMsg error={st.error} />
-        <table className="table compact"><thead><tr><th>{t('code')}</th><th>{t('label_fr')}</th><th>{t('timezone')}</th><th>{t('active')}</th></tr></thead>
-          <tbody>{(terr.data ?? []).map((x) => <tr key={x.code}><td>{x.code}</td><td>{x.name_fr} / {x.name_en}</td><td className="small">{x.timezone}</td><td><input type="checkbox" checked={x.active} onChange={(e) => st.run({ ...x, active: e.target.checked })} aria-label={t('active')} /></td></tr>)}</tbody></table>
+        <div className="table-wrap"><table className="table compact"><thead><tr><th>{t('code')}</th><th>{t('label_fr')}</th><th>{t('timezone')}</th><th>{t('active')}</th></tr></thead>
+          <tbody>{(terr.data ?? []).map((x) => <tr key={x.code}><td>{x.code}</td><td>{x.name_fr} / {x.name_en}</td><td className="small">{x.timezone}</td><td><input type="checkbox" checked={x.active} onChange={(e) => st.run({ ...x, active: e.target.checked })} aria-label={t('active')} /></td></tr>)}</tbody></table></div>
         <form className="stack" onSubmit={(e) => { e.preventDefault(); st.run(tf); }}>
           <div className="grid3">
             <Field label={t('code')}><input required pattern="[A-Za-z]{2,3}" value={tf.code} onChange={(e) => setTf({ ...tf, code: e.target.value.toUpperCase() })} /></Field>
@@ -173,8 +173,8 @@ function Referentials() {
         </form>
       </Card>
       <Card title={t('breed')}>
-        <table className="table compact"><thead><tr><th>{t('code')}</th><th>{t('label_fr')}</th><th>{t('label_en')}</th><th>{t('synonyms')}</th></tr></thead>
-          <tbody>{(br.data ?? []).map((x) => <tr key={x.code}><td className="small">{x.code}</td><td>{x.label_fr}</td><td>{x.label_en}</td><td className="small">{x.synonyms.join(', ')}</td></tr>)}</tbody></table>
+        <div className="table-wrap"><table className="table compact"><thead><tr><th>{t('code')}</th><th>{t('label_fr')}</th><th>{t('label_en')}</th><th>{t('synonyms')}</th></tr></thead>
+          <tbody>{(br.data ?? []).map((x) => <tr key={x.code}><td className="small">{x.code}</td><td>{x.label_fr}</td><td>{x.label_en}</td><td className="small">{x.synonyms.join(', ')}</td></tr>)}</tbody></table></div>
         <form className="stack" onSubmit={(e) => { e.preventDefault(); sb.run(); }}>
           <div className="grid2">
             <Field label={t('code')}><input required pattern="[A-Za-z0-9_]{2,40}" value={bf.code} onChange={(e) => setBf({ ...bf, code: e.target.value.toUpperCase() })} /></Field>
