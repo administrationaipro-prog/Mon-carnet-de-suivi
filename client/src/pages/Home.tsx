@@ -34,7 +34,7 @@ function daysFromToday(iso: string) {
 
 /** Liste « à faire » : une carte par alerte, bordure colorée + libellé texte (accessibilité). */
 export function AlertList({ alerts, limit = 30 }: { alerts: any[]; limit?: number }) {
-  const { t, d } = useApp();
+  const { t, d, num } = useApp();
   if (!alerts.length) return <p className="muted">{t('home_no_alerts')}</p>;
   return (
     <ul className="todo">
@@ -42,10 +42,10 @@ export function AlertList({ alerts, limit = 30 }: { alerts: any[]; limit?: numbe
         const n = daysFromToday(a.due_date);
         const chip = n < 0 ? <span className="chip err">{t('late_days', { n: -n })}</span> : n === 0 ? <span className="chip warn">{t('today_lbl')}</span> : <span className={`chip ${a.type === 'weighing_due' ? 'ok' : a.type === 'health_followup' ? 'info' : 'warn'}`}>{t('in_days', { n })}</span>;
         return (
-          <li key={i} className={a.type}>
-            <Link to={`/herd/${a.animal_id}`} className="t-main">
-              <div className="t-title">{t(`alert_t.${a.type}`, { day: a.day, product: a.product ?? '' })}</div>
-              <div className="t-sub">{a.animal} · {d(a.due_date)}</div>
+          <li key={i} className={a.type.startsWith('stock') ? 'stock_alert' : a.type}>
+            <Link to={a.type.startsWith('stock') ? '/stock' : `/herd/${a.animal_id}`} className="t-main">
+              <div className="t-title">{t(`alert_t.${a.type}`, { day: a.day, product: a.product ?? '' })}{a.type.startsWith('stock') ? ` : ${a.animal}` : ''}</div>
+              <div className="t-sub">{a.type.startsWith('stock') ? `${t('stock_left', { qty: num(a.qty, 1), unit: a.unit })} · ${t('stock_rupture', { date: d(a.due_date) })}` : `${a.animal} · ${d(a.due_date)}`}</div>
             </Link>
             {chip}
           </li>
@@ -157,6 +157,7 @@ export function Home() {
             {canWrite && <Link className="tile" to="/weigh"><span className="ti"><Icon name="scale" /></span>{t('tile_weigh')}</Link>}
             {canWrite && <Link className="tile mango" to="/herd/new"><span className="ti"><Icon name="plus" /></span>{t('tile_new_animal')}</Link>}
             <Link className="tile sky" to="/health"><span className="ti"><Icon name="health" /></span>{t('nav_health')}</Link>
+            <Link className="tile" to="/stock"><span className="ti"><Icon name="box" /></span>{t('nav_stock')}</Link>
             <Link className="tile" to="/herd"><span className="ti"><Icon name="list" /></span>{t('nav_herd')}</Link>
             <Link className="tile" to="/analytics"><span className="ti"><Icon name="chart" /></span>{t('nav_analytics')}</Link>
           </div>

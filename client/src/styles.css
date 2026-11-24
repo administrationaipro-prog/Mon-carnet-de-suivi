@@ -309,3 +309,7 @@ tr.row-action:active td { background: var(--primary-soft); }
 .compare .h { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; padding-bottom: .3rem; border-bottom: 1px solid var(--border); }
 .compare > div { padding: .45rem 0; border-bottom: 1px solid var(--border); } .compare .v { text-align: right; font-weight: 750; font-variant-numeric: tabular-nums; padding-left: .6rem; }
 .compare .l { color: var(--muted); }
+
+.card.highlight-warn { border-color: color-mix(in srgb, var(--mango) 55%, var(--border)); box-shadow: 0 0 0 3px var(--mango-soft); }
+.todo li.stock_alert { border-left-color: var(--mango); }
+@media (min-width: 900px) { .tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); } }

@@ -5,7 +5,7 @@ import { useApp } from '../state';
 import { Icon } from '../components/Icon';
 import { Badge, Card, ErrorMsg, Field, Notice, Stat, useLoad, useSubmit } from '../components/ui';
 
-const TABS = ['admin_stats', 'users', 'farms_admin', 'referentials', 'settings', 'audit', 'outbox'] as const;
+const TABS = ['admin_stats', 'users', 'farms_admin', 'shop_admin', 'referentials', 'settings', 'audit', 'outbox'] as const;
 
 export function Admin() {
   const { t } = useApp();
@@ -17,6 +17,7 @@ export function Admin() {
       {tab === 'admin_stats' && <Overview />}
       {tab === 'users' && <Users />}
       {tab === 'farms_admin' && <Farms />}
+      {tab === 'shop_admin' && <AdminShop />}
       {tab === 'referentials' && <Referentials />}
       {tab === 'settings' && <Settings />}
       {tab === 'audit' && <Audit />}
@@ -282,6 +283,103 @@ export function AdminFarmView({ id }: { id: string }) {
         <thead><tr><th>{t('internal_id')}</th><th>{t('sex')}</th><th>{t('birth_date')}</th><th>{t('animal_status')}</th><th className="num">{t('weighings_n')}</th><th className="num">{t('last_weight')}</th><th className="num">{t('gmq_overall')}</th></tr></thead>
         <tbody>{(a.data ?? []).map((x) => <tr key={x.id}><td>{x.internal_id}</td><td>{t(`sex.${x.sex}`)}</td><td>{d(x.birth_date)}</td><td>{t(`astatus.${x.status}`)}</td><td className="num">{x.weighings_count}</td><td className="num">{num(x.last_weight, 2)}</td><td className="num">{num(x.gmq_overall, 0)}</td></tr>)}</tbody>
       </table></div>
+    </div>
+  );
+}
+
+const ORDER_CHIP: Record<string, 'info' | 'warn' | 'ok' | 'neutral'> = { requested: 'info', confirmed: 'warn', delivered: 'ok', cancelled: 'neutral' };
+
+/** Boutique : commandes à traiter, produits négociés (réserve) et fournisseurs. */
+function AdminShop() {
+  const { t, d, num, lang } = useApp();
+  const orders = useLoad<any[]>('/admin/shop/orders');
+  const products = useLoad<any[]>('/admin/shop/products');
+  const suppliers = useLoad<any[]>('/admin/shop/suppliers');
+  const terr = useLoad<any[]>('/ref/territories');
+  const st = useSubmit(async (id: string, status: string) => {
+    const note = window.prompt(t('order_note_prompt')) ?? undefined;
+    await post(`/admin/shop/orders/${id}/status`, { status, note: note || undefined });
+    orders.reload(); products.reload();
+  });
+  const emptyP = { id: '', supplier_id: '', name: '', category: 'hay', unit: 'botte', unit_weight_kg: '', price_eur: '', reserved_quantity: '', delivery_days: '7', territory_code: 'MQ', description: '', active: true };
+  const [p, setP] = useState<any>(emptyP);
+  const sp = useSubmit(async () => {
+    const body = { ...p, unit_weight_kg: p.unit_weight_kg === '' ? null : Number(p.unit_weight_kg), price_eur: p.price_eur === '' ? null : Number(String(p.price_eur).replace(',', '.')),
+      reserved_quantity: Number(p.reserved_quantity || 0), delivery_days: Number(p.delivery_days || 7), territory_code: p.territory_code || null, description: p.description || null };
+    delete body.id; delete body.remaining; delete body.ordered_quantity; delete body.supplier_name; delete body.created_at;
+    if (p.id) await put(`/admin/shop/products/${p.id}`, body); else await post('/admin/shop/products', body);
+    setP(emptyP); products.reload(); suppliers.reload();
+  });
+  const [sup, setSup] = useState({ name: '', contact_name: '', phone: '', email: '', territory_code: 'MQ' });
+  const ss = useSubmit(async () => { await post('/admin/shop/suppliers', { ...sup, territory_code: sup.territory_code || null }); setSup({ name: '', contact_name: '', phone: '', email: '', territory_code: 'MQ' }); suppliers.reload(); });
+  const upP = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setP({ ...p, [k]: e.target.value });
+  const terrOpts = (<><option value="">{t('any_territory')}</option>{(terr.data ?? []).filter((x) => x.active).map((x) => <option key={x.code} value={x.code}>{lang === 'fr' ? x.name_fr : x.name_en}</option>)}</>);
+  return (
+    <div className="stack">
+      <Card title={t('orders')}>
+        <p className="small muted" style={{ margin: '0 0 .6rem' }}>{t('shop_admin_hint')}</p>
+        <ErrorMsg error={orders.error || st.error} />
+        {!orders.data?.length ? <p className="muted">{t('shop_no_orders')}</p> : (
+          <ul className="list">{orders.data.map((o) => (
+            <li key={o.id} className="stack-sm">
+              <div className="row between"><b>{o.quantity} × {o.product_name}</b><Badge kind={ORDER_CHIP[o.status]}>{t(`ordst.${o.status}`)}</Badge></div>
+              <div className="small muted">{o.farm_name} ({o.locality ?? o.territory_code}) · {o.requested_by_name ?? '—'} · {d(o.created_at)} · {o.supplier_name}{o.unit_price_eur !== null ? ` · ${num(o.quantity * o.unit_price_eur, 2)} €` : ''}</div>
+              {o.note && <div className="small">« {o.note} »</div>}
+              <div className="row">
+                {o.status === 'requested' && <button className="btn small primary" disabled={st.busy} onClick={() => st.run(o.id, 'confirmed')}>{t('order_confirm')}</button>}
+                {o.status === 'confirmed' && <button className="btn small primary" disabled={st.busy} onClick={() => st.run(o.id, 'delivered')}>{t('order_deliver')}</button>}
+                {(o.status === 'requested' || o.status === 'confirmed') && <button className="btn small danger" disabled={st.busy} onClick={() => st.run(o.id, 'cancelled')}>{t('order_cancel')}</button>}
+              </div>
+            </li>
+          ))}</ul>
+        )}
+      </Card>
+      <Card title={t('products')}>
+        <ErrorMsg error={products.error} />
+        <div className="table-wrap"><table className="table compact">
+          <thead><tr><th>{t('name')}</th><th>{t('supplier')}</th><th className="num">{t('reserved')}</th><th className="num">{t('ordered')}</th><th className="num">{t('remaining')}</th><th className="num">€</th><th /></tr></thead>
+          <tbody>{(products.data ?? []).map((x) => (
+            <tr key={x.id} style={{ opacity: x.active ? 1 : .5 }}><td>{x.name}<div className="small muted">{t(`pcat.${x.category}`)} · {x.unit} · {x.territory_code ?? t('any_territory')}</div></td><td>{x.supplier_name}</td>
+              <td className="num">{x.reserved_quantity}</td><td className="num">{x.ordered_quantity}</td><td className="num"><b>{x.remaining}</b></td><td className="num">{num(x.price_eur, 2)}</td>
+              <td><button className="icon-btn small" aria-label={t('edit')} onClick={() => setP({ ...x, unit_weight_kg: x.unit_weight_kg ?? '', price_eur: x.price_eur ?? '', territory_code: x.territory_code ?? '', description: x.description ?? '' })}><Icon name="edit" size={16} /></button></td></tr>
+          ))}</tbody>
+        </table></div>
+        {!!suppliers.data?.length && (
+          <form className="stack card inset" onSubmit={(e) => { e.preventDefault(); sp.run(); }}>
+            <h3 style={{ marginTop: 0 }}>{p.id ? `${t('edit')} — ${p.name}` : t('new_product')}</h3>
+            <div className="grid3">
+              <Field label={t('supplier')} required><select required value={p.supplier_id} onChange={upP('supplier_id')}><option value="">—</option>{suppliers.data.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
+              <Field label={t('name')} required><input required value={p.name} onChange={upP('name')} /></Field>
+              <Field label={t('category')}><select value={p.category} onChange={upP('category')}>{['hay', 'grain', 'feed', 'mineral', 'bedding', 'health', 'other'].map((c) => <option key={c} value={c}>{t(`pcat.${c}`)}</option>)}</select></Field>
+              <Field label={t('stock_unit')} required><input required value={p.unit} onChange={upP('unit')} /></Field>
+              <Field label={t('unit_weight')}><input type="number" min={0} step="0.1" value={p.unit_weight_kg} onChange={upP('unit_weight_kg')} /></Field>
+              <Field label={t('price_eur')}><input type="number" min={0} step="0.01" value={p.price_eur} onChange={upP('price_eur')} /></Field>
+              <Field label={t('reserved')} required><input required type="number" min={0} step={1} value={p.reserved_quantity} onChange={upP('reserved_quantity')} /></Field>
+              <Field label={t('delivery_days')}><input type="number" min={0} max={120} value={p.delivery_days} onChange={upP('delivery_days')} /></Field>
+              <Field label={t('territory')}><select value={p.territory_code ?? ''} onChange={upP('territory_code')}>{terrOpts}</select></Field>
+            </div>
+            <Field label={t('description')}><input value={p.description} onChange={upP('description')} /></Field>
+            <label className="check"><input type="checkbox" checked={p.active} onChange={(e) => setP({ ...p, active: e.target.checked })} /> {t('active')}</label>
+            <ErrorMsg error={sp.error} />
+            <div className="row"><button className="btn primary" disabled={sp.busy}>{t('save')}</button>{p.id && <button type="button" className="btn" onClick={() => setP(emptyP)}>{t('cancel')}</button>}</div>
+          </form>
+        )}
+      </Card>
+      <Card title={t('suppliers')}>
+        <ul className="list">{(suppliers.data ?? []).map((s) => <li key={s.id}><b>{s.name}</b><div className="small muted">{[s.contact_name, s.phone, s.email, s.territory_code].filter(Boolean).join(' · ')} · {s.products} {t('products').toLowerCase()}</div></li>)}</ul>
+        <form className="stack card inset" onSubmit={(e) => { e.preventDefault(); ss.run(); }}>
+          <h3 style={{ marginTop: 0 }}>{t('new_supplier')}</h3>
+          <div className="grid3">
+            <Field label={t('name')} required><input required minLength={2} value={sup.name} onChange={(e) => setSup({ ...sup, name: e.target.value })} /></Field>
+            <Field label={t('contact')}><input value={sup.contact_name} onChange={(e) => setSup({ ...sup, contact_name: e.target.value })} /></Field>
+            <Field label={t('phone')}><input type="tel" value={sup.phone} onChange={(e) => setSup({ ...sup, phone: e.target.value })} /></Field>
+            <Field label={t('email')}><input type="email" value={sup.email} onChange={(e) => setSup({ ...sup, email: e.target.value })} /></Field>
+            <Field label={t('territory')}><select value={sup.territory_code} onChange={(e) => setSup({ ...sup, territory_code: e.target.value })}>{terrOpts}</select></Field>
+          </div>
+          <ErrorMsg error={ss.error} />
+          <button className="btn primary" disabled={ss.busy}>{t('add')}</button>
+        </form>
+      </Card>
     </div>
   );
 }

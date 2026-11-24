@@ -20,6 +20,8 @@ Application de suivi et d’optimisation de la production ovine, multi-exploitat
 | **Reproduction** | Lutte, contrôle de gestation, mise bas (nés vivants/morts), sevrage, avortement ; alerte de mise bas attendue |
 | **Consanguinité** | Coefficient F de chaque animal calculé automatiquement (méthode de Wright) à partir de la généalogie saisie, affiché sur la fiche avec jauge, nombre de générations connues et complétude. **Refus d'enregistrement** d'un animal dont F dépasse la limite (création et changement de parents). Limites réglables par l'administrateur (défauts : alerte 6,25 %, refus au-delà de 12,5 %) |
 | **Simulateur de saillie** | Choix d'un bélier et d'une brebis : consanguinité attendue de l'agneau, apparentement, ancêtres communs, verdict (acceptable / à éviter / refusée), performances observées des parents et de leurs descendants, taux de réussite historique des saillies (avec effectif et intervalle de confiance), date de mise bas attendue. Lecture seule |
+| **Stocks** | Articles consommables (foin, grains, aliment, minéraux, litière…) : quantité inventoriée, entrées/sorties, rythme de consommation (ex. 1 botte / 7 jours). Stock estimé au jour le jour, jours restants, date de rupture et date limite de commande (délai de livraison) ; **alerte au responsable** (notification + courriel) quand il reste le seuil choisi (1 unité par défaut), une seule fois par cycle de réapprovisionnement |
+| **Boutique** | Catalogue de produits négociés par la plateforme auprès de fournisseurs partenaires, avec une **quantité réservée aux éleveurs de l'application** (jamais dépassée, verrouillage transactionnel) ; commande = réservation (pas de paiement en ligne), confirmée/livrée/annulée par l'administrateur ; à la livraison, le stock de l'exploitation est crédité automatiquement |
 | **Lots & parcelles** | Lots et système de conduite, parcelles (surface, occupation, repos, lot présent) |
 | **Indicateurs (§8)** | Mortalité, morbidité, taux de sevrage, productivité maternelle, coût alimentaire/kg gagné, complétude, croissance par race — toujours avec effectifs, période et données manquantes, sans inférence causale |
 | **Exports** | CSV (animaux, pesées, alimentation, santé, reproduction) en FR ou EN, compatible Excel, neutralisation des formules, export journalisé |
@@ -148,6 +150,13 @@ Couverture des critères d’acceptation :
 - **Limites par défaut** : alerte à partir de **6,25 %**, **refus** d'enregistrement au-delà de **12,5 %** (un couple à exactement 12,5 % est accepté avec alerte). Ce sont des repères zootechniques usuels, **pas un barème réglementaire vérifié** : ils sont réglables dans *Administration → Paramètres* (alerte 1–25 %, limite 3–25 %) et doivent être validés avec l'organisme de sélection de la race / l'Institut de l'Élevage avant usage officiel.
 - **Refus** : création d'un animal et changement de ses parents (la modification d'autres champs n'est pas bloquée). Détection des boucles de généalogie.
 - **Simulateur** : les « performances » affichées sont **observées et descriptives** (l'héritabilité n'est pas appliquée) ; la probabilité de réussite d'une saillie vient de l'historique saisi (saillie suivie d'une mise bas 100 à 200 jours plus tard) et n'est affichée qu'à partir de 3 saillies.
+
+## Stocks et boutique : fonctionnement
+
+- **Estimation** : stock estimé = dernier inventaire + entrées − sorties depuis − (rythme × jours écoulés). Sans rythme renseigné, aucune date de rupture n'est inventée.
+- **Alerte** : « Il faut passer commande » dès que le stock estimé atteint le seuil d'alerte **ou** que la rupture arrive avant la fin du délai de livraison. Vérification à chaque mouvement et toutes les heures ; une nouvelle alerte n'est émise qu'après une entrée ou un inventaire.
+- **Réserves fournisseurs** : l'administrateur saisit fournisseurs, produits, prix indicatifs, territoire et quantité réservée (*Administration → Boutique*). Les éleveurs commandent dans la limite du restant ; une annulation libère la quantité.
+- **Hors périmètre à ce stade** : paiement en ligne, facturation, CGV et contrats fournisseurs (à définir par la plateforme).
 
 ## Points restant à arbitrer (cahier des charges §30)
 

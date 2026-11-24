@@ -11,6 +11,8 @@ import { farmsRouter, invitationsRouter } from './routes/farms.js';
 import { animalsRouter } from './routes/animals.js';
 import { analyticsRouter, collectiveRouter } from './routes/analytics.js';
 import { matingRouter } from './routes/mating.js';
+import { stockRouter } from './routes/stock.js';
+import { shopRouter, adminShopRouter } from './routes/shop.js';
 import { adminRouter, refRouter } from './routes/admin.js';
 import { pool } from './db.js';
 import { config } from './config.js';
@@ -45,6 +47,9 @@ export function createApp() {
   api.use('/farms/:farmId', animalsRouter);
   api.use('/farms/:farmId', analyticsRouter);
   api.use('/farms/:farmId', matingRouter);
+  api.use('/farms/:farmId', stockRouter);
+  api.use('/shop', shopRouter);
+  api.use('/admin/shop', adminShopRouter);
   api.use('/farms', farmsRouter);
   api.use('/collective', collectiveRouter);
   api.use('/admin', adminRouter);

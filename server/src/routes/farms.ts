@@ -6,6 +6,7 @@ import { audit } from '../lib/audit.js';
 import { sendMail, notify } from '../lib/mail.js';
 import { getSetting } from '../db.js';
 import { weighingStatus, gmqSeries, addDays } from '../lib/indicators.js';
+import { itemEstimate } from '../lib/stockAlerts.js';
 
 export const farmsRouter = Router();
 const fid = (c: Ctx) => c.req.params.farmId as string;
@@ -120,6 +121,13 @@ async function alerts(c: Ctx, farmId: string) {
       where r.farm_id = $1 and r.type = 'mating' and r.date + 150 between current_date - 5 and current_date + 21
         and not exists (select 1 from repro_events x where x.ewe_id = r.ewe_id and x.type in ('lambing','abortion') and x.date > r.date)`, [farmId]);
   for (const r of lambing.rows) out.push({ type: 'lambing_expected', animal_id: r.animal_id, animal: r.animal, due_date: r.due });
+  // Stocks à commander
+  const items = await c.db.query('select * from stock_items where farm_id = $1 and active', [farmId]);
+  for (const it of items.rows) {
+    const est = await itemEstimate(c.db, it, t);
+    if (est.status === 'order' || est.status === 'empty')
+      out.push({ type: est.status === 'empty' ? 'stock_empty' : 'stock_low', item_id: it.id, animal: it.name, qty: est.estimated, unit: it.unit, due_date: est.rupture_date ?? t });
+  }
   return out.sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)));
 }
 
