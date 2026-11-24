@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { del, put, todayIso } from '../api';
 import { Icon, Sheep } from '../components/Icon';
+import { InbreedingGauge, levelChip } from '../components/InbreedingGauge';
 import { useApp } from '../state';
 import { Badge, Card, ErrorMsg, Field, Loading, Modal, Notice, numOrNull, useLoad, useSubmit } from '../components/ui';
 import { WeighingForm } from '../components/WeighingForm';
@@ -95,6 +96,22 @@ export function AnimalDetail() {
         </Card>
       </div>
 
+      {x.inbreeding && (
+        <Card title={t('inbreeding')} actions={farm.role !== 'referent' && <Link className="btn small" to={`/simulateur?${x.sex === 'M' ? 'ram' : 'ewe'}=${x.id}`}><Icon name="dna" size={16} />{t('sim_open')}</Link>}>
+          {x.inbreeding.computable ? (
+            <div className="stack-sm">
+              <div className="row between wrap">
+                <div><div className="small muted" style={{ fontWeight: 700 }}>{t('inb_coef')}</div><div className="stat-value num" style={{ fontSize: '2.2rem' }}>{num(x.inbreeding.coefficient_percent, 2)} %</div></div>
+                <span className={`chip ${levelChip(x.inbreeding.level)}`}>{t(`inb_level.${x.inbreeding.level}`)}</span>
+              </div>
+              <InbreedingGauge percent={x.inbreeding.coefficient_percent} warn={x.inbreeding.warn_percent} max={x.inbreeding.limit_percent} />
+              <p className="small muted" style={{ margin: 0 }}>{t('inb_generations', { n: x.inbreeding.generations_known })} · {t('inb_completeness', { pct: pct(x.inbreeding.completeness) })}</p>
+              <p className="small muted" style={{ margin: 0 }}>{t('inb_min_note')}</p>
+            </div>
+          ) : <p className="muted" style={{ margin: 0 }}>{t('inb_not_computable')}</p>}
+        </Card>
+      )}
+
       <Card title={t('growth_curve')}>
         {g.schedule.overdue.length > 0 && <Notice kind="warn">{t('overdue_weighings')} : {g.schedule.overdue.map((o: any) => `J${o.day} (${d(o.date)})`).join(', ')}</Notice>}
         {chart.length > 0 && (
@@ -130,13 +147,18 @@ export function AnimalDetail() {
 
       <Card title={t('weighing_history')}>
         {x.weighings.length === 0 ? <p className="muted">{t('missing_data')}</p> : (
-          <div className="table-wrap"><table className="table">
-            <thead><tr><th>{t('date')}</th><th className="num">{t('weight_kg')}</th><th className="num">{t('height_cm')}</th><th className="num">{t('length_cm')}</th><th>{t('operator')}</th><th>{t('note')}</th>{canWrite && <th />}</tr></thead>
-            <tbody>{x.weighings.map((w: any) => (
-              <tr key={w.id}><td>{d(w.date)}</td><td className="num">{num(w.weight_kg, 2)}</td><td className="num">{num(w.height_cm)}</td><td className="num">{num(w.length_cm)}</td><td>{w.operator_name ?? '—'}{w.source === 'offline_sync' ? ' ⇅' : ''}</td><td>{w.note ?? ''}</td>
-                {canWrite && <td><button className="btn small" onClick={() => setEdit(w)}>{t('correct')}</button></td>}</tr>
-            ))}</tbody>
-          </table></div>
+          <>
+            {canWrite && <p className="small muted" style={{ margin: '0 0 .6rem' }}>{t('weighing_tap_hint')}</p>}
+            <div className="table-wrap"><table className="table">
+              <thead><tr>{canWrite && <th aria-label={t('correct')} />}<th>{t('date')}</th><th className="num">{t('weight_kg')}</th><th className="num">{t('height_cm')}</th><th className="num">{t('length_cm')}</th><th>{t('operator')}</th><th>{t('note')}</th></tr></thead>
+              <tbody>{x.weighings.map((w: any) => (
+                <tr key={w.id} className={canWrite ? 'row-action' : ''} onClick={canWrite ? () => setEdit(w) : undefined}>
+                  {canWrite && <td style={{ width: 52 }}><button type="button" className="icon-btn small" aria-label={`${t('correct')} ${d(w.date)}`} onClick={(e) => { e.stopPropagation(); setEdit(w); }}><Icon name="edit" size={18} /></button></td>}
+                  <td>{d(w.date)}</td><td className="num"><b>{num(w.weight_kg, 2)}</b></td><td className="num">{num(w.height_cm)}</td><td className="num">{num(w.length_cm)}</td><td>{w.operator_name ?? '—'}{w.source === 'offline_sync' ? ' ⇅' : ''}</td><td>{w.note ?? ''}</td>
+                </tr>
+              ))}</tbody>
+            </table></div>
+          </>
         )}
       </Card>
 
@@ -191,7 +213,8 @@ function EditWeighing({ w, onClose, onDone }: { w: any; onClose: () => void; onD
           <Field label={t('height_cm')}><input type="number" step="0.1" value={f.height_cm} onChange={up('height_cm')} /></Field>
           <Field label={t('length_cm')}><input type="number" step="0.1" value={f.length_cm} onChange={up('length_cm')} /></Field>
         </div>
-        <Field label={t('correction_reason')} required><input required value={f.reason} onChange={up('reason')} /></Field>
+        <Field label={t('correction_reason')} required hint={!f.reason ? t('delete_needs_reason') : undefined}><input required value={f.reason} onChange={up('reason')} /></Field>
+        <div className="date-chips">{['reason_typo', 'reason_duplicate', 'reason_wrong_animal'].map((k) => <button type="button" key={k} onClick={() => setF({ ...f, reason: t(k) })}>{t(k)}</button>)}</div>
         {err?.status === 422 ? (
           <Notice kind="warn">{t('confirm_warnings', { list: (err.details?.warnings ?? []).map((x: string) => t(`warn.${x}`)).join(' ; ') })}
             <label className="check"><input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} /> {t('confirm')}</label></Notice>

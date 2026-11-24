@@ -408,6 +408,88 @@ describe('Administration : suivi des inscriptions', () => {
   });
 });
 
+describe('Consanguinité : fiche, simulateur et refus d’enregistrement', () => {
+  let F: any, other: any;
+  const mk = (internal_id: string, sex: 'M' | 'F', extra: any = {}) => post(F, `/api/farms/${F.farmId}/animals`, { internal_id, sex, birth_date: '2020-01-01', breed_code: 'BLACKBELLY', ...extra });
+  const ids: Record<string, string> = {};
+  beforeAll(async () => {
+    F = await approvedFarmer(app, admin, 'inbreed@farm.org');
+    other = await approvedFarmer(app, admin, 'inbreed-other@farm.org');
+    // fondateurs non apparentés
+    for (const [k, sex] of [['G1', 'M'], ['G2', 'F'], ['G3', 'F'], ['E1', 'M']] as const) ids[k] = (await mk(k, sex)).body.id;
+    // frère et sœur pleins (G1 × G2), demi-sœur (G1 × G3)
+    ids.S = (await mk('S', 'M', { sire_id: ids.G1, dam_id: ids.G2, birth_date: '2022-01-01' })).body.id;
+    ids.D = (await mk('D', 'F', { sire_id: ids.G1, dam_id: ids.G2, birth_date: '2022-01-01' })).body.id;
+    ids.H = (await mk('H', 'F', { sire_id: ids.G1, dam_id: ids.G3, birth_date: '2022-01-01' })).body.id;
+  });
+
+  it('refuse l’enregistrement d’un agneau issu de frère × sœur (25 % > limite 12,5 %)', async () => {
+    const r = await mk('LAMB-SIB', 'M', { sire_id: ids.S, dam_id: ids.D, birth_date: '2024-01-01' });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toBe('inbreeding_limit_exceeded');
+    expect(r.body.details).toEqual({ inbreeding_percent: 25, limit_percent: 12.5 });
+    expect((await F.get(`/api/farms/${F.farmId}/animals?q=LAMB-SIB`)).body).toHaveLength(0); // rien n'a été créé
+    // parent × descendant : refusé aussi
+    expect((await mk('LAMB-PO', 'F', { sire_id: ids.G1, dam_id: ids.D, birth_date: '2024-01-01' })).body.error).toBe('inbreeding_limit_exceeded');
+  });
+  it('accepte une consanguinité nulle ; l’alerte (demi-frère × demi-sœur, 12,5 %) n’est pas un refus', async () => {
+    expect((await mk('LAMB-OK', 'M', { sire_id: ids.E1, dam_id: ids.D, birth_date: '2024-01-01' })).status).toBe(200);
+    const half = await mk('LAMB-HALF', 'M', { sire_id: ids.S, dam_id: ids.H, birth_date: '2024-01-01' }); // S et H : demi-germains (même père G1)
+    expect(half.status).toBe(200);
+    const fiche = (await F.get(`/api/farms/${F.farmId}/animals/${half.body.id}`)).body.inbreeding;
+    expect(fiche).toMatchObject({ computable: true, coefficient_percent: 12.5, level: 'warning', limit_percent: 12.5, warn_percent: 6.25, generations_known: 2 });
+  });
+  it('fiche : non calculable sans père et mère connus (jamais deviné)', async () => {
+    const one = await mk('LAMB-ONE', 'F', { sire_id: ids.G1, birth_date: '2024-01-01' });
+    expect((await F.get(`/api/farms/${F.farmId}/animals/${one.body.id}`)).body.inbreeding).toMatchObject({ computable: false, coefficient_percent: null, level: null });
+  });
+  it('modification : refus si on change les parents vers un couple trop apparenté ; autres modifications libres', async () => {
+    const ok = (await mk('LAMB-EDIT', 'M', { sire_id: ids.E1, dam_id: ids.D, birth_date: '2024-01-01' })).body;
+    const base = { internal_id: 'LAMB-EDIT', sex: 'M', birth_date: '2024-01-01', breed_code: 'BLACKBELLY', status: 'active' };
+    expect((await put(F, `/api/farms/${F.farmId}/animals/${ok.id}`, { ...base, sire_id: ids.S, dam_id: ids.D })).body.error).toBe('inbreeding_limit_exceeded');
+    expect((await put(F, `/api/farms/${F.farmId}/animals/${ok.id}`, { ...base, sire_id: ids.E1, dam_id: ids.D, notes: 'RAS' })).status).toBe(200);
+    // boucle de généalogie refusée : un animal ne peut pas être le parent de son propre parent
+    expect((await put(F, `/api/farms/${F.farmId}/animals/${ids.G1}`, { internal_id: 'G1', sex: 'M', birth_date: '2020-01-01', status: 'active', sire_id: ids.E1, dam_id: ids.D })).status).toBeGreaterThanOrEqual(400);
+  });
+  it('simulateur : consanguinité attendue, ancêtres communs, verdict, lecture seule', async () => {
+    const sim = (r: string, e: string) => F.get(`/api/farms/${F.farmId}/mating-simulator?ram=${ids[r]}&ewe=${ids[e]}&date=2026-11-01`);
+    const sib = (await sim('S', 'D')).body;
+    expect(sib.inbreeding).toMatchObject({ coefficient_percent: 25, level: 'refused', would_be_refused: true, relationship_percent: 50 });
+    expect(sib.inbreeding.common_ancestors.map((a: any) => a.label).sort()).toEqual(['G1', 'G2']);
+    expect(sib.reproduction.expected_lambing_date).toBe('2027-03-31');
+    const half = (await sim('S', 'H')).body;
+    expect(half.inbreeding).toMatchObject({ coefficient_percent: 12.5, level: 'warning', would_be_refused: false });
+    expect((await sim('E1', 'G3')).body.inbreeding).toMatchObject({ coefficient_percent: 0, level: 'ok' });
+    // aucune probabilité inventée sans historique de saillies
+    expect(sib.reproduction.success).toMatchObject({ basis: null, rate: null });
+    expect((await F.get(`/api/farms/${F.farmId}/mating-simulator?ram=${ids.D}&ewe=${ids.S}`)).body.error).toBe('sire_must_be_male');
+    expect((await F.get(`/api/farms/${F.farmId}/mating-simulator?ram=${ids.S}&ewe=${ids.S}`)).body.error).toBe('dam_must_be_female');
+  });
+  it('simulateur : taux de réussite des saillies calculé sur l’historique, avec effectif', async () => {
+    // 4 saillies anciennes de D : 3 suivies d'une mise bas (≈150 j plus tard), 1 non
+    const ev = (type: string, date: string, extra: any = {}) => post(F, `/api/farms/${F.farmId}/repro`, { ewe_id: ids.D, type, date, ...extra });
+    for (const [m, l] of [['2025-01-10', '2025-06-09'], ['2025-07-01', '2025-11-28'], ['2024-02-01', '2024-06-30']]) { await ev('mating', m, { ram_id: ids.G1 }); await ev('lambing', l, { born_alive: 2, born_dead: 0 }); }
+    await ev('mating', '2024-09-01', { ram_id: ids.G1 });
+    const r = (await F.get(`/api/farms/${F.farmId}/mating-simulator?ram=${ids.E1}&ewe=${ids.D}`)).body.reproduction;
+    expect(r.success).toMatchObject({ basis: 'ewe', n: 4, k: 3, rate: 0.75 });
+    expect(r.success.ci.low).toBeLessThan(0.75);
+    expect(r.success.ci.high).toBeGreaterThan(0.75);
+    expect(r.litter.ewe).toEqual({ n: 3, mean: 2 });
+  });
+  it('simulateur et seuils isolés par exploitation ; limite modifiable par l’administrateur', async () => {
+    expect((await other.get(`/api/farms/${F.farmId}/mating-simulator?ram=${ids.S}&ewe=${ids.H}`)).status).toBe(404);
+    expect((await other.get(`/api/farms/${other.farmId}/mating-simulator?ram=${ids.S}&ewe=${ids.H}`)).status).toBe(404); // animaux d'une autre exploitation
+    expect((await put(other, '/api/admin/settings', { inbreeding_max_percent: 5 })).status).toBe(403);
+    expect((await put(admin, '/api/admin/settings', { inbreeding_max_percent: 5, inbreeding_warn_percent: 6 })).body.error).toBe('inbreeding_limits_inconsistent');
+    expect((await put(admin, '/api/admin/settings', { inbreeding_max_percent: 2 })).status).toBe(400); // plancher de sécurité
+    expect((await put(admin, '/api/admin/settings', { inbreeding_warn_percent: 3, inbreeding_max_percent: 6.25 })).status).toBe(200);
+    // la limite abaissée à 6,25 % refuse désormais demi-frère × demi-sœur (12,5 %)
+    const r = await mk('LAMB-HALF2', 'F', { sire_id: ids.S, dam_id: ids.H, birth_date: '2024-02-01' });
+    expect(r.body).toMatchObject({ error: 'inbreeding_limit_exceeded', details: { inbreeding_percent: 12.5, limit_percent: 6.25 } });
+    await put(admin, '/api/admin/settings', { inbreeding_warn_percent: 6.25, inbreeding_max_percent: 12.5 }); // rétablit
+  });
+});
+
 describe('Droits RGPD', () => {
   it('export des données personnelles et suppression du compte', async () => {
     const u = await registerVerified(app, 'rgpd@test.org');

@@ -10,6 +10,7 @@ import { registrationRouter } from './routes/registration.js';
 import { farmsRouter, invitationsRouter } from './routes/farms.js';
 import { animalsRouter } from './routes/animals.js';
 import { analyticsRouter, collectiveRouter } from './routes/analytics.js';
+import { matingRouter } from './routes/mating.js';
 import { adminRouter, refRouter } from './routes/admin.js';
 import { pool } from './db.js';
 import { config } from './config.js';
@@ -43,6 +44,7 @@ export function createApp() {
   api.use('/invitations', invitationsRouter);
   api.use('/farms/:farmId', animalsRouter);
   api.use('/farms/:farmId', analyticsRouter);
+  api.use('/farms/:farmId', matingRouter);
   api.use('/farms', farmsRouter);
   api.use('/collective', collectiveRouter);
   api.use('/admin', adminRouter);

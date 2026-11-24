@@ -435,5 +435,7 @@ insert into settings (key, value) values
   ('consent_policy_version', '"2026-11-v1"'),
   ('weighing_protocol_days', '[0,7,14,21,30,45,60,90,120]'),
   ('weighing_tolerance_days', '3'),
-  ('interpolation_max_gap_days', '30')
+  ('interpolation_max_gap_days', '30'),
+  ('inbreeding_warn_percent', '6.25'),
+  ('inbreeding_max_percent', '12.5')
 on conflict (key) do nothing;

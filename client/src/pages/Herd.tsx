@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { post, put, todayIso } from '../api';
 import { useApp } from '../state';
-import { Badge, Card, ErrorMsg, Field, Loading, numOrNull, strOrNull, useLoad, useSubmit, downloadUrl } from '../components/ui';
+import { Badge, Card, ErrorMsg, Field, Loading, Notice, numOrNull, strOrNull, useLoad, useSubmit, downloadUrl } from '../components/ui';
 
 export function useBreeds() {
   const { lang } = useApp();
@@ -69,7 +69,7 @@ const blank = {
 };
 
 export function AnimalForm() {
-  const { t, farm } = useApp();
+  const { t, farm, num } = useApp();
   const { id } = useParams();
   const nav = useNavigate();
   const editing = !!id;
@@ -98,7 +98,12 @@ export function AnimalForm() {
     const r = editing ? await put(`/farms/${farm.id}/animals/${id}`, body) : await post(`/farms/${farm.id}/animals`, body);
     nav(`/herd/${r.id}`);
   });
+  const pair = f?.sire_id && f?.dam_id && farm ? `/farms/${farm.id}/mating-simulator?ram=${f.sire_id}&ewe=${f.dam_id}` : null;
+  const prev = useLoad<any>(pair, [pair]);
   if (!farm || !f) return <Loading />;
+  const parentsChanged = !editing || existing.data?.sire_id !== (f.sire_id || null) || existing.data?.dam_id !== (f.dam_id || null);
+  const pv = pair && prev.data && prev.data.ram.id === f.sire_id && prev.data.ewe.id === f.dam_id ? prev.data.inbreeding : null;
+  const blocked = !!pv?.would_be_refused && parentsChanged;
   const up = (k: keyof typeof blank) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value });
   const others = (all.data ?? []).filter((a) => a.id !== id);
   const opt = (arr: string[], prefix: string) => [<option key="" value="">—</option>, ...arr.map((v) => <option key={v} value={v}>{t(`${prefix}.${v}`)}</option>)];
@@ -133,6 +138,13 @@ export function AnimalForm() {
           <Field label={t('parentage_certainty')}><select value={f.parentage_certainty} onChange={up('parentage_certainty')}>{opt(['certain', 'probable', 'uncertain'], 'pcert')}</select></Field>
         </div>
       </Card>
+      {pv && (
+        <Notice kind={blocked ? 'error' : pv.level === 'warning' ? 'warn' : 'ok'}>
+          <b>{t('inb_form_preview', { pct: num(pv.coefficient_percent, 2) })}</b>
+          {blocked && <div>{t('inb_form_blocked', { pct: num(pv.coefficient_percent, 2), max: num(pv.limit_percent, 2) })}</div>}
+          {!blocked && <div className="small">{t(`inb_level.${pv.level}`)} · {t('inb_limit_line', { warn: num(pv.warn_percent, 2), max: num(pv.limit_percent, 2) })}</div>}
+        </Notice>
+      )}
       <Card title={t('birth_record')}>
         <div className="grid3">
           <Field label={t('litter_size')}><input type="number" min={1} max={6} value={f.litter_size} onChange={up('litter_size')} /></Field>
@@ -147,7 +159,7 @@ export function AnimalForm() {
         {editing && <Field label={t('change_reason')}><input value={f.reason} onChange={up('reason')} /></Field>}
       </Card>
       <ErrorMsg error={s.error} />
-      <div className="row"><button className="btn primary" disabled={s.busy}>{t('save')}</button><button type="button" className="btn" onClick={() => nav(-1)}>{t('cancel')}</button></div>
+      <div className="row"><button className="btn primary" disabled={s.busy || blocked}>{t('save')}</button><button type="button" className="btn" onClick={() => nav(-1)}>{t('cancel')}</button></div>
     </form>
   );
 }

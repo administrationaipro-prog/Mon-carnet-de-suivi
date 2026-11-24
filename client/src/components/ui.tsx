@@ -21,11 +21,14 @@ export function useLoad<T>(path: string | null, deps: unknown[] = []) {
 }
 
 export function ErrorMsg({ error }: { error: unknown }) {
-  const { t } = useApp();
+  const { t, num } = useApp();
   if (!error) return null;
   const code = error instanceof ApiError ? error.code : 'generic';
   const k = `err.${code}`;
-  const msg = t(k) === k ? t('err.generic') : t(k);
+  // les détails numériques (ex. consanguinité 25 % / limite 12,5 %) sont insérés dans le message, formatés selon la langue
+  const det = error instanceof ApiError && error.details && typeof error.details === 'object' && !Array.isArray(error.details) ? (error.details as Record<string, unknown>) : undefined;
+  const vars = det ? Object.fromEntries(Object.entries(det).map(([a, b]) => [a, typeof b === 'number' ? num(b, 2) : String(b)])) : undefined;
+  const msg = t(k) === k ? t('err.generic') : t(k, vars);
   return <div className="alert alert-error" role="alert">{msg}</div>;
 }
 

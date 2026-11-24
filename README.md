@@ -18,6 +18,8 @@ Application de suivi et d’optimisation de la production ovine, multi-exploitat
 | **Alimentation** | Ration par animal ou par lot, quantité, base brute/MS, distribuée vs réellement consommée, fréquence, eau, période, coût |
 | **Santé** | Observation, analyse (coproscopie, FAMACHA, NEC), traitement, délai d’attente, suivi programmé ; diagnostic « suspecté » ou « confirmé » ; **aucun diagnostic ni prescription automatisés** |
 | **Reproduction** | Lutte, contrôle de gestation, mise bas (nés vivants/morts), sevrage, avortement ; alerte de mise bas attendue |
+| **Consanguinité** | Coefficient F de chaque animal calculé automatiquement (méthode de Wright) à partir de la généalogie saisie, affiché sur la fiche avec jauge, nombre de générations connues et complétude. **Refus d'enregistrement** d'un animal dont F dépasse la limite (création et changement de parents). Limites réglables par l'administrateur (défauts : alerte 6,25 %, refus au-delà de 12,5 %) |
+| **Simulateur de saillie** | Choix d'un bélier et d'une brebis : consanguinité attendue de l'agneau, apparentement, ancêtres communs, verdict (acceptable / à éviter / refusée), performances observées des parents et de leurs descendants, taux de réussite historique des saillies (avec effectif et intervalle de confiance), date de mise bas attendue. Lecture seule |
 | **Lots & parcelles** | Lots et système de conduite, parcelles (surface, occupation, repos, lot présent) |
 | **Indicateurs (§8)** | Mortalité, morbidité, taux de sevrage, productivité maternelle, coût alimentaire/kg gagné, complétude, croissance par race — toujours avec effectifs, période et données manquantes, sans inférence causale |
 | **Exports** | CSV (animaux, pesées, alimentation, santé, reproduction) en FR ou EN, compatible Excel, neutralisation des formules, export journalisé |
@@ -138,6 +140,14 @@ Couverture des critères d’acceptation :
 | Export CSV fidèle | `api.test.ts`, E2E |
 | Synchronisation sans écrasement silencieux | `api.test.ts` (idempotence), E2E (hors connexion) |
 | Sauvegarde et restauration vérifiées | `scripts/verify-restore.sh` |
+
+## Consanguinité : méthode, limites et réserves
+
+- **Calcul** : F(animal) = coefficient de parenté entre son père et sa mère (méthode tabulaire de Wright), calculé sur la généalogie réellement saisie. Un ancêtre inconnu est traité comme non apparenté : le taux affiché est donc un **minimum**, d'autant plus fiable que la généalogie est complète (la fiche indique générations connues et complétude). Sans père **et** mère connus, le taux n'est pas calculable et n'est jamais deviné.
+- **Valeurs de référence vérifiées par les tests** : frère × sœur ou parent × descendant 25 % ; demi-frère × demi-sœur, oncle × nièce, grand-parent × petit-enfant 12,5 % ; cousins germains 6,25 %.
+- **Limites par défaut** : alerte à partir de **6,25 %**, **refus** d'enregistrement au-delà de **12,5 %** (un couple à exactement 12,5 % est accepté avec alerte). Ce sont des repères zootechniques usuels, **pas un barème réglementaire vérifié** : ils sont réglables dans *Administration → Paramètres* (alerte 1–25 %, limite 3–25 %) et doivent être validés avec l'organisme de sélection de la race / l'Institut de l'Élevage avant usage officiel.
+- **Refus** : création d'un animal et changement de ses parents (la modification d'autres champs n'est pas bloquée). Détection des boucles de généalogie.
+- **Simulateur** : les « performances » affichées sont **observées et descriptives** (l'héritabilité n'est pas appliquée) ; la probabilité de réussite d'une saillie vient de l'historique saisi (saillie suivie d'une mise bas 100 à 200 jours plus tard) et n'est affichée qu'à partir de 3 saillies.
 
 ## Points restant à arbitrer (cahier des charges §30)
 
