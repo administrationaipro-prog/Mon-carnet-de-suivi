@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { pool, withTx } from '../src/db.js';
+import { runStockAlerts } from '../src/lib/stockAlerts.js';
+import { addDays } from '../src/lib/indicators.js';
 import { setup, agent, registerVerified, makeAdmin, approvedFarmer, post, put, patch, del, reqBody, lastToken, H } from './helpers.js';
 import { totp } from '../src/lib/crypto.js';
 
@@ -487,6 +489,119 @@ describe('Consanguinité : fiche, simulateur et refus d’enregistrement', () =>
     const r = await mk('LAMB-HALF2', 'F', { sire_id: ids.S, dam_id: ids.H, birth_date: '2024-02-01' });
     expect(r.body).toMatchObject({ error: 'inbreeding_limit_exceeded', details: { inbreeding_percent: 12.5, limit_percent: 6.25 } });
     await put(admin, '/api/admin/settings', { inbreeding_warn_percent: 6.25, inbreeding_max_percent: 12.5 }); // rétablit
+  });
+});
+
+describe('Stocks : estimation et alerte « il faut passer commande »', () => {
+  let F: any, other: any;
+  const today = new Date().toISOString().slice(0, 10);
+  beforeAll(async () => {
+    F = await approvedFarmer(app, admin, 'stock@farm.org');
+    other = await approvedFarmer(app, admin, 'stock-other@farm.org');
+  });
+  const notifs = async (email: string) => (await pool.query(`select n.kind, n.payload from notifications n join users u on u.id = n.user_id where u.email = $1 and n.kind = 'stock_low'`, [email])).rows;
+
+  it('3 bottes à 1 botte/semaine comptées il y a 14 jours : il en reste 1, alerte envoyée une seule fois', async () => {
+    const r = await post(F, `/api/farms/${F.farmId}/stock`, { name: 'Foin', category: 'hay', unit: 'botte', quantity: 3, date: addDays(today, -14), consumption_qty: 1, consumption_days: 7, alert_units: 1, lead_days: 7 });
+    expect(r.status).toBe(200);
+    expect(r.body.estimate).toMatchObject({ estimated: 1, days_left: 7, rupture_date: addDays(today, 7), status: 'order' });
+    let n = await notifs('stock@farm.org');
+    expect(n).toHaveLength(1);
+    expect(n[0].payload).toMatchObject({ item: 'Foin', qty: 1, unit: 'botte' });
+    const mail = await pool.query(`select subject, body from outbox_emails where to_email = 'stock@farm.org' and subject like 'Il faut passer commande%'`);
+    expect(mail.rows).toHaveLength(1);
+    expect(mail.rows[0].body).toMatch(/il reste environ 1 botte/);
+    // la tâche planifiée ne renvoie pas l'alerte
+    await runStockAlerts();
+    expect(await notifs('stock@farm.org')).toHaveLength(1);
+    // tableau de bord : alerte visible
+    const dash = await F.get(`/api/farms/${F.farmId}/dashboard`);
+    expect(dash.body.alerts.find((a: any) => a.type === 'stock_low')).toMatchObject({ animal: 'Foin', qty: 1, unit: 'botte' });
+  });
+  it('une entrée réarme l’alerte, une nouvelle baisse la redéclenche ; la tâche planifiée rattrape les oublis', async () => {
+    const item = (await F.get(`/api/farms/${F.farmId}/stock`)).body.find((i: any) => i.name === 'Foin');
+    const r = await post(F, `/api/farms/${F.farmId}/stock/${item.id}/movements`, { type: 'in', quantity: 4 });
+    expect(r.body.estimate).toMatchObject({ estimated: 5, status: 'ok' });
+    expect(r.body.last_alert_at).toBeNull(); // réarmée
+    const out = await post(F, `/api/farms/${F.farmId}/stock/${item.id}/movements`, { type: 'out', quantity: 4, note: 'bottes moisies' });
+    expect(out.body.estimate).toMatchObject({ estimated: 1, status: 'order' });
+    expect(await notifs('stock@farm.org')).toHaveLength(2);
+    // alerte réarmée sans nouveau mouvement (cas d'un oubli) : la tâche planifiée l'envoie
+    await withTx(F.id, (c) => c.query('update stock_items set last_alert_at = null where id = $1', [item.id]));
+    expect(await runStockAlerts()).toBeGreaterThanOrEqual(1);
+    expect(await notifs('stock@farm.org')).toHaveLength(3);
+    expect(await runStockAlerts()).toBe(0); // pas de doublon
+  });
+  it('règles de saisie et isolation entre exploitations', async () => {
+    expect((await post(F, `/api/farms/${F.farmId}/stock`, { name: 'Grain', category: 'grain', unit: 'sac', quantity: 2, consumption_qty: 1 })).body.details[0].message).toBe('consumption_incomplete');
+    expect((await post(F, `/api/farms/${F.farmId}/stock`, { name: 'Grain', category: 'grain', unit: 'sac', quantity: 2, date: addDays(today, 3) })).body.error).toBe('date_in_future');
+    const g = await post(F, `/api/farms/${F.farmId}/stock`, { name: 'Grain', category: 'grain', unit: 'sac', quantity: 2 });
+    expect(g.body.estimate).toMatchObject({ estimated: 2, days_left: null, status: 'ok' }); // sans rythme : pas de rupture inventée
+    expect((await other.get(`/api/farms/${F.farmId}/stock`)).status).toBe(404);
+    expect((await post(other, `/api/farms/${F.farmId}/stock/${g.body.id}/movements`, { type: 'out', quantity: 1 })).status).toBe(404);
+    expect((await post(other, `/api/farms/${other.farmId}/stock/${g.body.id}/movements`, { type: 'out', quantity: 1 })).status).toBe(404);
+    // RLS : sans contexte, la base ne montre aucun stock
+    const c = await pool.connect();
+    try { await c.query('begin'); expect((await c.query('select count(*)::int n from stock_items')).rows[0].n).toBe(0); await c.query('rollback'); } finally { c.release(); }
+  });
+});
+
+describe('Boutique : réserve fournisseur, commandes et livraison', () => {
+  let A: any, B: any, supplier: any, hay: any;
+  beforeAll(async () => {
+    A = await approvedFarmer(app, admin, 'shop-a@farm.org');
+    B = await approvedFarmer(app, admin, 'shop-b@farm.org');
+  });
+  it('catalogue géré par l’administrateur uniquement', async () => {
+    expect((await post(A, '/api/admin/shop/suppliers', { name: 'Pirate' })).status).toBe(403);
+    supplier = (await post(admin, '/api/admin/shop/suppliers', { name: 'Coop Fourrages Martinique', phone: '0596 00 00 00', territory_code: 'MQ' })).body;
+    hay = (await post(admin, '/api/admin/shop/products', { supplier_id: supplier.id, name: 'Foin de pangola', category: 'hay', unit: 'botte', unit_weight_kg: 20, price_eur: 9.5, reserved_quantity: 10, delivery_days: 5, territory_code: 'MQ' })).body;
+    expect(hay.reserved_quantity).toBe(10);
+    const list = (await A.get(`/api/shop/products?farm=${A.farmId}`)).body;
+    expect(list.find((p: any) => p.id === hay.id)).toMatchObject({ remaining: 10, supplier_name: 'Coop Fourrages Martinique' });
+    expect((await A.get(`/api/shop/products?farm=${B.farmId}`)).status).toBe(404); // catalogue lu au nom de sa propre exploitation
+  });
+  it('commandes dans la limite de la réserve, annulation, isolation', async () => {
+    const o1 = await post(A, `/api/farms/${A.farmId}/orders`, { product_id: hay.id, quantity: 4 });
+    expect(o1.body).toMatchObject({ status: 'requested', quantity: 4, unit_price_eur: 9.5 });
+    const over = await post(B, `/api/farms/${B.farmId}/orders`, { product_id: hay.id, quantity: 7 });
+    expect(over.status).toBe(409);
+    expect(over.body).toMatchObject({ error: 'reserve_insufficient', details: { remaining: 6 } });
+    const o2 = await post(B, `/api/farms/${B.farmId}/orders`, { product_id: hay.id, quantity: 6 });
+    expect(o2.status).toBe(200);
+    expect((await A.get(`/api/shop/products?farm=${A.farmId}`)).body.find((p: any) => p.id === hay.id).remaining).toBe(0);
+    // B ne voit pas les commandes de A
+    expect((await B.get(`/api/farms/${B.farmId}/orders`)).body.map((o: any) => o.id)).not.toContain(o1.body.id);
+    expect((await post(B, `/api/farms/${A.farmId}/orders/${o1.body.id}/cancel`)).status).toBe(404);
+    expect((await post(B, `/api/farms/${B.farmId}/orders/${o1.body.id}/cancel`)).status).toBe(404);
+    // annulation par B : la réserve est rendue
+    expect((await post(B, `/api/farms/${B.farmId}/orders/${o2.body.id}/cancel`)).status).toBe(200);
+    expect((await A.get(`/api/shop/products?farm=${A.farmId}`)).body.find((p: any) => p.id === hay.id).remaining).toBe(6);
+    // l'administrateur est notifié des commandes
+    const n = await pool.query(`select count(*)::int n from notifications n join users u on u.id = n.user_id where u.email = 'admin@test.org' and n.kind = 'new_order'`);
+    expect(n.rows[0].n).toBeGreaterThanOrEqual(2);
+    // réserve non réductible sous le déjà-commandé
+    expect((await put(admin, `/api/admin/shop/products/${hay.id}`, { ...hay, reserved_quantity: 2 })).body.error).toBe('reserve_below_ordered');
+  });
+  it('confirmation puis livraison : le stock de l’exploitation est crédité automatiquement', async () => {
+    const order = (await A.get(`/api/farms/${A.farmId}/orders`)).body[0];
+    expect((await post(admin, `/api/admin/shop/orders/${order.id}/status`, { status: 'delivered' })).status).toBe(409); // doit être confirmée d'abord
+    expect((await post(admin, `/api/admin/shop/orders/${order.id}/status`, { status: 'confirmed', note: 'Livraison jeudi' })).status).toBe(200);
+    expect((await post(admin, `/api/admin/shop/orders/${order.id}/status`, { status: 'delivered' })).status).toBe(200);
+    const stock = (await A.get(`/api/farms/${A.farmId}/stock`)).body;
+    const item = stock.find((i: any) => i.product_id === hay.id);
+    expect(item).toMatchObject({ name: 'Foin de pangola', unit: 'botte', lead_days: 5 });
+    expect(item.estimate.estimated).toBe(4);
+    expect((await A.get(`/api/farms/${A.farmId}/orders`)).body[0].status).toBe('delivered');
+    const n = await pool.query(`select payload from notifications n join users u on u.id = n.user_id where u.email = 'shop-a@farm.org' and n.kind = 'order_status' order by n.id`);
+    expect(n.rows.map((r) => r.payload.status)).toEqual(['confirmed', 'delivered']);
+    // un référent (lecture seule) ne peut pas commander
+    const ref = await registerVerified(app, 'shop-ref@test.org');
+    await post(A, `/api/farms/${A.farmId}/invitations`, { email: 'shop-ref@test.org', role: 'referent' });
+    const inv = (await ref.get('/api/auth/me')).body.invitations[0];
+    await post(ref, `/api/invitations/${inv.id}/accept`);
+    expect((await post(ref, `/api/farms/${A.farmId}/orders`, { product_id: hay.id, quantity: 1 })).body.error).toBe('read_only');
+    expect((await ref.get(`/api/farms/${A.farmId}/stock`)).status).toBe(200);
   });
 });
 

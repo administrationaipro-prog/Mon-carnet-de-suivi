@@ -37,7 +37,7 @@ export function SyncBar() {
 
 const farmNav: [string, string, IconName][] = [
   ['/', 'nav_home', 'home'], ['/herd', 'nav_herd', 'list'], ['/weigh', 'nav_weigh', 'scale'], ['/analytics', 'nav_analytics', 'chart'],
-  ['/feeding', 'nav_feeding', 'wheat'], ['/health', 'nav_health', 'health'], ['/repro', 'nav_repro', 'repro'], ['/simulateur', 'nav_simulator', 'dna'], ['/parcels', 'nav_parcels', 'grid'],
+  ['/feeding', 'nav_feeding', 'wheat'], ['/stock', 'nav_stock', 'box'], ['/boutique', 'nav_shop', 'cart'], ['/health', 'nav_health', 'health'], ['/repro', 'nav_repro', 'repro'], ['/simulateur', 'nav_simulator', 'dna'], ['/parcels', 'nav_parcels', 'grid'],
   ['/members', 'nav_members', 'users'], ['/collective', 'nav_collective', 'globe'],
 ];
 

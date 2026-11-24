@@ -74,7 +74,7 @@ export function Notifications() {
       <div className="row between"><h1>{t('nav_notifications')}</h1><button className="btn small" onClick={() => mr.run()}>{t('mark_read')}</button></div>
       {!n.data?.length ? <p className="muted">{t('no_notifications')}</p> : (
         <ul className="list">{n.data.map((x) => (
-          <li key={x.id} className={x.read_at ? 'muted' : ''}>{dt(x.created_at)} — {t(`notif.${x.kind}`, { ...x.payload, status: x.payload.status ? t(`regst.${x.payload.status}`) : '' })}{x.payload.reason ? ` (${x.payload.reason})` : ''}</li>
+          <li key={x.id} className={x.read_at ? 'muted' : ''}>{dt(x.created_at)} — {t(`notif.${x.kind}`, { ...x.payload, status: x.payload.status ? t(`${x.kind === 'order_status' ? 'ordst' : 'regst'}.${x.payload.status}`).toLowerCase() : '' })}{x.payload.reason ? ` (${x.payload.reason})` : ''}</li>
         ))}</ul>
       )}
     </div>

@@ -364,6 +364,89 @@ create table if not exists record_history (
   at timestamptz not null default now()
 );
 
+-- ===================== Boutique et stocks =====================
+
+-- Fournisseurs partenaires et produits négociés par la plateforme (catalogue commun, géré par l'administrateur)
+create table if not exists suppliers (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  contact_name text,
+  phone text,
+  email text,
+  territory_code text references territories(code),
+  notes text,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists products (
+  id uuid primary key default gen_random_uuid(),
+  supplier_id uuid not null references suppliers(id),
+  name text not null,
+  category text not null check (category in ('hay','grain','feed','mineral','bedding','health','other')),
+  unit text not null,
+  unit_weight_kg numeric(10,2) check (unit_weight_kg > 0),
+  price_eur numeric(10,2) check (price_eur >= 0),
+  -- quantité réservée par le fournisseur aux éleveurs de l'application ; ordered_quantity = commandes non annulées
+  reserved_quantity integer not null default 0 check (reserved_quantity >= 0),
+  ordered_quantity integer not null default 0 check (ordered_quantity >= 0),
+  delivery_days integer not null default 7 check (delivery_days between 0 and 120),
+  territory_code text references territories(code),
+  description text,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+-- Stocks de chaque exploitation (données privées, RLS)
+create table if not exists stock_items (
+  id uuid primary key default gen_random_uuid(),
+  farm_id uuid not null references farms(id) on delete cascade,
+  name text not null,
+  category text not null check (category in ('hay','grain','feed','mineral','bedding','health','other')),
+  unit text not null,
+  consumption_qty numeric(10,3) check (consumption_qty > 0),
+  consumption_days numeric(8,2) check (consumption_days > 0),
+  alert_units numeric(10,3) not null default 1 check (alert_units >= 0),
+  lead_days integer not null default 7 check (lead_days between 0 and 120),
+  product_id uuid references products(id) on delete set null,
+  last_alert_at timestamptz,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  unique (id, farm_id)
+);
+
+create table if not exists stock_movements (
+  id uuid primary key default gen_random_uuid(),
+  farm_id uuid not null,
+  item_id uuid not null,
+  type text not null check (type in ('count','in','out')),
+  quantity numeric(10,3) not null check (quantity >= 0),
+  date date not null,
+  note text,
+  order_id uuid,
+  author_id uuid references users(id),
+  created_at timestamptz not null default now(),
+  foreign key (item_id, farm_id) references stock_items(id, farm_id) on delete cascade
+);
+create index if not exists stock_movements_item on stock_movements(item_id, date);
+
+create table if not exists orders (
+  id uuid primary key default gen_random_uuid(),
+  farm_id uuid not null references farms(id) on delete cascade,
+  product_id uuid not null references products(id),
+  quantity integer not null check (quantity > 0),
+  unit_price_eur numeric(10,2),
+  status text not null default 'requested' check (status in ('requested','confirmed','delivered','cancelled')),
+  note text,
+  decision_note text,
+  delivery_date date,
+  requested_by uuid references users(id),
+  handled_by uuid references users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists orders_farm on orders(farm_id, created_at desc);
+
 -- ===================== Row-Level Security =====================
 
 create or replace function app_uid() returns uuid language sql stable as $$
@@ -391,7 +474,7 @@ $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['lots','parcels','animals','births','weighings','feeding_events','health_events','repro_events','record_history']
+  foreach t in array array['lots','parcels','animals','births','weighings','feeding_events','health_events','repro_events','record_history','stock_items','stock_movements']
   loop
     execute format('alter table %I enable row level security', t);
     execute format('alter table %I force row level security', t);
@@ -405,6 +488,32 @@ begin
     execute format('create policy p_delete on %I for delete using (app_can_write(farm_id))', t);
   end loop;
 end $$;
+
+-- Service de stock (alertes planifiées, livraison d'une commande) : accès limité aux tables de stock,
+-- uniquement dans une transaction ouverte par le serveur avec app.ctx = 'stock_service'.
+do $$
+declare t text;
+begin
+  foreach t in array array['stock_items','stock_movements']
+  loop
+    execute format('drop policy if exists p_stock_service on %I', t);
+    execute format('create policy p_stock_service on %I for all using (current_setting(''app.ctx'', true) = ''stock_service'') with check (current_setting(''app.ctx'', true) = ''stock_service'')', t);
+  end loop;
+end $$;
+
+create or replace function app_is_admin() returns boolean language sql stable as $$
+  select exists (select 1 from users where id = app_uid() and platform_role = 'admin' and status = 'active')
+$$;
+
+-- Commandes : visibles par les membres de l'exploitation et par l'administrateur qui les traite
+alter table orders enable row level security;
+alter table orders force row level security;
+drop policy if exists p_read on orders;
+drop policy if exists p_insert on orders;
+drop policy if exists p_update on orders;
+create policy p_read on orders for select using (app_can_read(farm_id) or app_is_admin());
+create policy p_insert on orders for insert with check (app_can_write(farm_id));
+create policy p_update on orders for update using (app_can_write(farm_id) or app_is_admin()) with check (app_can_write(farm_id) or app_is_admin());
 
 -- ===================== Référentiels =====================
 

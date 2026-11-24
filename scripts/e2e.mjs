@@ -279,10 +279,58 @@ try {
   await desk.setViewportSize({ width: 1366, height: 900 });
   log('Pesée en doublon supprimée depuis un téléphone (crayon visible, motif rapide)');
 
+  // ---------- Stocks et boutique : alerte « il faut passer commande », commande, livraison ----------
+  const adminPost = (path, body) => admin.evaluate(async ([p, b]) => {
+    const r = await fetch('/api' + p, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-requested-with': 'carnet' }, body: JSON.stringify(b) });
+    return { status: r.status, body: await r.json().catch(() => ({})) };
+  }, [path, body]);
+  const sup = (await adminPost('/admin/shop/suppliers', { name: `Coop fourrages ${RUN}`, territory_code: 'MQ' })).body;
+  const prod = await adminPost('/admin/shop/products', { supplier_id: sup.id, name: `Foin pangola ${RUN}`, category: 'hay', unit: 'botte', unit_weight_kg: 20, price_eur: 9.5, reserved_quantity: 20, delivery_days: 5, territory_code: 'MQ' });
+  if (prod.status !== 200) throw new Error('produit non créé : ' + JSON.stringify(prod));
+  const ago14 = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+  await desk.goto(`${BASE}/stock`);
+  await desk.getByRole('button', { name: 'Ajouter un article' }).click();
+  await desk.getByLabel(/^Article/).fill('Foin');
+  await desk.getByLabel(/^Unité/).fill('botte');
+  await desk.getByLabel(/^Quantité en stock/).fill('3');
+  await desk.getByLabel(/^Date du comptage/).fill(ago14);
+  await desk.getByLabel(/^Quantité consommée/).fill('1');
+  await desk.getByLabel(/^Tous les/).fill('7');
+  await desk.getByRole('button', { name: 'Enregistrer' }).click();
+  await expectText(desk, 'Il faut passer commande');
+  await expectText(desk, '≈ 7 jours restants');
+  const alertN = await db.query(`select count(*)::int n from notifications n join users u on u.id = n.user_id where u.email = $1 and n.kind = 'stock_low'`, [FARMER.email]);
+  if (alertN.rows[0].n !== 1) throw new Error('alerte de stock attendue : ' + alertN.rows[0].n);
+  await shot(desk, '08c-stocks');
+  // commande depuis la carte de stock → boutique
+  await desk.getByRole('link', { name: 'Commander' }).first().click();
+  const card = desk.locator('.card', { hasText: `Foin pangola ${RUN}` });
+  await card.waitFor();
+  await card.getByLabel('Quantité').fill('4');
+  await card.getByRole('button', { name: 'Commander' }).click();
+  await expectText(desk, 'Commande envoyée');
+  await expectText(desk, 'Réserve éleveurs : 16 restant(s)');
+  await shot(desk, '08d-boutique');
+  // l'administrateur confirme puis livre
+  await admin.goto(`${BASE}/admin`);
+  await admin.getByRole('tab', { name: 'Boutique' }).click();
+  const li = admin.locator('li', { hasText: `4 × Foin pangola ${RUN}` });
+  await li.getByRole('button', { name: 'Confirmer' }).click();
+  await li.getByRole('button', { name: 'Marquer livrée' }).click();
+  await li.getByText('Livrée').waitFor();
+  // le stock de l'éleveur est crédité
+  await desk.goto(`${BASE}/stock`);
+  const credited = desk.locator('.card', { hasText: `Foin pangola ${RUN}` });
+  await credited.waitFor();
+  if (!(await credited.innerText()).includes('4')) throw new Error('stock non crédité après livraison');
+  await desk.goto(`${BASE}/boutique`);
+  await expectText(desk, 'Livrée');
+  log('Stocks : alerte à 1 botte restante ; boutique : commande, confirmation, livraison et stock crédité');
+
   // ---------- Aucune page ne doit déborder horizontalement sur un petit téléphone ----------
   await desk.setViewportSize({ width: 360, height: 740 });
   const overflowing = [];
-  for (const path of ['/', '/herd', `/herd/${b1.id}`, '/herd/new', '/weigh', '/analytics', '/feeding', '/health', '/repro', '/simulateur', '/parcels', '/members', '/collective', '/account', '/notifications', '/installer']) {
+  for (const path of ['/', '/herd', `/herd/${b1.id}`, '/herd/new', '/weigh', '/analytics', '/feeding', '/stock', '/boutique', '/health', '/repro', '/simulateur', '/parcels', '/members', '/collective', '/account', '/notifications', '/installer']) {
     await desk.goto(BASE + path); await desk.waitForTimeout(400);
     const extra = await desk.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     if (extra > 1) overflowing.push(`${path} (+${extra}px)`);

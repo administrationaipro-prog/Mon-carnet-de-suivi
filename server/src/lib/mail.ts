@@ -2,6 +2,7 @@ import type { Db } from '../db.js';
 import { config } from '../config.js';
 
 type Lang = 'fr' | 'en';
+const fmtFr = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso.split('-').reverse().join('/') : iso);
 const T: Record<string, Record<Lang, (p: any) => { subject: string; body: string }>> = {
   verify_email: {
     fr: (p) => ({ subject: 'Vérifiez votre adresse courriel', body: `Bonjour,\n\nPour vérifier votre adresse, ouvrez : ${config.publicUrl}/verify-email?token=${p.token}\n\nCe lien expire dans 48 heures.` }),
@@ -22,6 +23,18 @@ const T: Record<string, Record<Lang, (p: any) => { subject: string; body: string
   test_email: {
     fr: () => ({ subject: 'Test d’envoi — Carnet de suivi', body: `Ce courriel confirme que l’envoi depuis ${config.publicUrl} fonctionne.` }),
     en: () => ({ subject: 'Sending test — Farm Logbook', body: `This email confirms that sending from ${config.publicUrl} works.` }),
+  },
+  stock_low: {
+    fr: (p) => ({ subject: `Il faut passer commande : ${p.item}`, body: `Bonjour,\n\nStock « ${p.item} » (${p.farm}) : il reste environ ${p.qty} ${p.unit}.${p.date ? `\nRupture estimée vers le ${fmtFr(p.date)}.` : ''}\n\nIl faut passer commande. Vous pouvez commander dans la boutique de l’application : ${config.publicUrl}/boutique\nPour mettre à jour le stock : ${config.publicUrl}/stock` }),
+    en: (p) => ({ subject: `Time to reorder: ${p.item}`, body: `Hello,\n\nStock “${p.item}” (${p.farm}): about ${p.qty} ${p.unit} left.${p.date ? `\nEstimated run-out around ${p.date}.` : ''}\n\nPlease place an order. You can order from the app shop: ${config.publicUrl}/boutique\nTo update the stock: ${config.publicUrl}/stock` }),
+  },
+  new_order: {
+    fr: (p) => ({ subject: `Nouvelle commande : ${p.quantity} × ${p.product}`, body: `L’exploitation « ${p.farm} » a commandé ${p.quantity} × ${p.product} (${p.supplier}).\nÀ traiter dans Administration → Boutique : ${config.publicUrl}/admin` }),
+    en: (p) => ({ subject: `New order: ${p.quantity} × ${p.product}`, body: `Farm “${p.farm}” ordered ${p.quantity} × ${p.product} (${p.supplier}).\nTo process in Administration → Shop: ${config.publicUrl}/admin` }),
+  },
+  order_status: {
+    fr: (p) => ({ subject: `Votre commande : ${p.statusFr}`, body: `Commande de ${p.quantity} × ${p.product} : ${p.statusFr}.${p.delivery_date ? `\nLivraison : ${fmtFr(p.delivery_date)}.` : ''}${p.note ? `\nMessage : ${p.note}` : ''}\n\nSuivi dans la boutique : ${config.publicUrl}/boutique` }),
+    en: (p) => ({ subject: `Your order: ${p.statusEn}`, body: `Order of ${p.quantity} × ${p.product}: ${p.statusEn}.${p.delivery_date ? `\nDelivery: ${p.delivery_date}.` : ''}${p.note ? `\nMessage: ${p.note}` : ''}\n\nTrack it in the shop: ${config.publicUrl}/boutique` }),
   },
   new_request: {
     fr: (p) => ({ subject: 'Nouvelle demande d’inscription à examiner', body: `Une demande (${p.territory}) vous est affectée. Connectez-vous à l’espace de validation.` }),

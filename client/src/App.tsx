@@ -11,6 +11,8 @@ import { Weigh } from './pages/Weigh';
 import { Feeding, Health, Repro, Parcels } from './pages/Journals';
 import { Analytics } from './pages/Analytics';
 import { Mating } from './pages/Mating';
+import { Stock } from './pages/Stock';
+import { Shop } from './pages/Shop';
 import { Members, Collective } from './pages/Farm';
 import { Account, Notifications } from './pages/Account';
 import { ReviewList, ReviewDetail } from './pages/Review';
@@ -58,6 +60,8 @@ function Routed() {
         <Route path="/weigh" element={needFarm(<Weigh />)} />
         <Route path="/analytics" element={needFarm(<Analytics />)} />
         <Route path="/feeding" element={needFarm(<Feeding />)} />
+        <Route path="/stock" element={needFarm(<Stock />)} />
+        <Route path="/boutique" element={needFarm(<Shop />)} />
         <Route path="/health" element={needFarm(<Health />)} />
         <Route path="/repro" element={needFarm(<Repro />)} />
         <Route path="/simulateur" element={needFarm(<Mating />)} />
