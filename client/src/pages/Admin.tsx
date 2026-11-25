@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { patch, post, put } from '../api';
+import { del, patch, post, put } from '../api';
 import { useApp } from '../state';
 import { Icon } from '../components/Icon';
 import { Badge, Card, ErrorMsg, Field, Notice, Stat, useLoad, useSubmit } from '../components/ui';
@@ -310,8 +310,23 @@ function AdminShop() {
     if (p.id) await put(`/admin/shop/products/${p.id}`, body); else await post('/admin/shop/products', body);
     setP(emptyP); products.reload(); suppliers.reload();
   });
-  const [sup, setSup] = useState({ name: '', contact_name: '', phone: '', email: '', territory_code: 'MQ' });
-  const ss = useSubmit(async () => { await post('/admin/shop/suppliers', { ...sup, territory_code: sup.territory_code || null }); setSup({ name: '', contact_name: '', phone: '', email: '', territory_code: 'MQ' }); suppliers.reload(); });
+  const emptyS = { id: '', name: '', contact_name: '', phone: '', email: '', territory_code: 'MQ', notes: '', active: true };
+  const [sup, setSup] = useState<any>(emptyS);
+  const ss = useSubmit(async () => {
+    const body = { name: sup.name, contact_name: sup.contact_name || null, phone: sup.phone || null, email: sup.email || null, territory_code: sup.territory_code || null, notes: sup.notes || null, active: sup.active };
+    if (sup.id) await put(`/admin/shop/suppliers/${sup.id}`, body); else await post('/admin/shop/suppliers', body);
+    setSup(emptyS); suppliers.reload(); products.reload();
+  });
+  const [removed, setRemoved] = useState<string | null>(null);
+  const rm = useSubmit(async (kind: 'suppliers' | 'products', id: string, name: string) => {
+    setRemoved(null);
+    if (!window.confirm(t(kind === 'suppliers' ? 'supplier_delete_confirm' : 'product_delete_confirm', { name }))) return;
+    const r = await del(`/admin/shop/${kind}/${id}`);
+    setRemoved(t(r.result === 'archived' ? 'shop_archived' : 'shop_deleted', { name }));
+    if (kind === 'suppliers' && sup.id === id) setSup(emptyS);
+    if (p.id === id) setP(emptyP);
+    suppliers.reload(); products.reload();
+  });
   const upP = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setP({ ...p, [k]: e.target.value });
   const terrOpts = (<><option value="">{t('any_territory')}</option>{(terr.data ?? []).filter((x) => x.active).map((x) => <option key={x.code} value={x.code}>{lang === 'fr' ? x.name_fr : x.name_en}</option>)}</>);
   return (
@@ -336,12 +351,17 @@ function AdminShop() {
       </Card>
       <Card title={t('products')}>
         <ErrorMsg error={products.error} />
+        <ErrorMsg error={rm.error} />
+        {removed && <Notice kind="ok">{removed}</Notice>}
         <div className="table-wrap"><table className="table compact">
           <thead><tr><th>{t('name')}</th><th>{t('supplier')}</th><th className="num">{t('reserved')}</th><th className="num">{t('ordered')}</th><th className="num">{t('remaining')}</th><th className="num">€</th><th /></tr></thead>
           <tbody>{(products.data ?? []).map((x) => (
             <tr key={x.id} style={{ opacity: x.active ? 1 : .5 }}><td>{x.name}<div className="small muted">{t(`pcat.${x.category}`)} · {x.unit} · {x.territory_code ?? t('any_territory')}</div></td><td>{x.supplier_name}</td>
               <td className="num">{x.reserved_quantity}</td><td className="num">{x.ordered_quantity}</td><td className="num"><b>{x.remaining}</b></td><td className="num">{num(x.price_eur, 2)}</td>
-              <td><button className="icon-btn small" aria-label={t('edit')} onClick={() => setP({ ...x, unit_weight_kg: x.unit_weight_kg ?? '', price_eur: x.price_eur ?? '', territory_code: x.territory_code ?? '', description: x.description ?? '' })}><Icon name="edit" size={16} /></button></td></tr>
+              <td><div className="row nowrap" style={{ gap: '.3rem' }}>
+                <button className="icon-btn small" aria-label={`${t('edit')} ${x.name}`} onClick={() => setP({ ...x, unit_weight_kg: x.unit_weight_kg ?? '', price_eur: x.price_eur ?? '', territory_code: x.territory_code ?? '', description: x.description ?? '' })}><Icon name="edit" size={16} /></button>
+                <button className="icon-btn small" style={{ color: 'var(--danger)' }} aria-label={`${t('delete')} ${x.name}`} disabled={rm.busy} onClick={() => rm.run('products', x.id, x.name)}><Icon name="trash" size={16} /></button>
+              </div></td></tr>
           ))}</tbody>
         </table></div>
         {!!suppliers.data?.length && (
@@ -366,9 +386,19 @@ function AdminShop() {
         )}
       </Card>
       <Card title={t('suppliers')}>
-        <ul className="list">{(suppliers.data ?? []).map((s) => <li key={s.id}><b>{s.name}</b><div className="small muted">{[s.contact_name, s.phone, s.email, s.territory_code].filter(Boolean).join(' · ')} · {s.products} {t('products').toLowerCase()}</div></li>)}</ul>
+        <ErrorMsg error={rm.error} />
+        {removed && <Notice kind="ok">{removed}</Notice>}
+        <ul className="list">{(suppliers.data ?? []).map((s) => (
+          <li key={s.id} className="row between nowrap" style={{ opacity: s.active ? 1 : .55 }}>
+            <span style={{ minWidth: 0 }}><b>{s.name}</b>{!s.active && <> <Badge>{t('archived')}</Badge></>}<div className="small muted">{[s.contact_name, s.phone, s.email, s.territory_code].filter(Boolean).join(' · ')}{[s.contact_name, s.phone, s.email, s.territory_code].some(Boolean) ? ' · ' : ''}{s.products} {t('products').toLowerCase()}</div></span>
+            <span className="row nowrap" style={{ gap: '.3rem' }}>
+              <button className="icon-btn small" aria-label={`${t('edit')} ${s.name}`} onClick={() => setSup({ ...emptyS, ...s, contact_name: s.contact_name ?? '', phone: s.phone ?? '', email: s.email ?? '', territory_code: s.territory_code ?? '', notes: s.notes ?? '' })}><Icon name="edit" size={16} /></button>
+              <button className="icon-btn small" style={{ color: 'var(--danger)' }} aria-label={`${t('delete')} ${s.name}`} disabled={rm.busy} onClick={() => rm.run('suppliers', s.id, s.name)}><Icon name="trash" size={16} /></button>
+            </span>
+          </li>
+        ))}</ul>
         <form className="stack card inset" onSubmit={(e) => { e.preventDefault(); ss.run(); }}>
-          <h3 style={{ marginTop: 0 }}>{t('new_supplier')}</h3>
+          <h3 style={{ marginTop: 0 }}>{sup.id ? `${t('edit')} — ${sup.name}` : t('new_supplier')}</h3>
           <div className="grid3">
             <Field label={t('name')} required><input required minLength={2} value={sup.name} onChange={(e) => setSup({ ...sup, name: e.target.value })} /></Field>
             <Field label={t('contact')}><input value={sup.contact_name} onChange={(e) => setSup({ ...sup, contact_name: e.target.value })} /></Field>
@@ -376,8 +406,9 @@ function AdminShop() {
             <Field label={t('email')}><input type="email" value={sup.email} onChange={(e) => setSup({ ...sup, email: e.target.value })} /></Field>
             <Field label={t('territory')}><select value={sup.territory_code} onChange={(e) => setSup({ ...sup, territory_code: e.target.value })}>{terrOpts}</select></Field>
           </div>
+          {sup.id && <label className="check"><input type="checkbox" checked={sup.active} onChange={(e) => setSup({ ...sup, active: e.target.checked })} /> {t('active')}</label>}
           <ErrorMsg error={ss.error} />
-          <button className="btn primary" disabled={ss.busy}>{t('add')}</button>
+          <div className="row"><button className="btn primary" disabled={ss.busy}>{sup.id ? t('save') : t('add')}</button>{sup.id && <button type="button" className="btn" onClick={() => setSup(emptyS)}>{t('cancel')}</button>}</div>
         </form>
       </Card>
     </div>
