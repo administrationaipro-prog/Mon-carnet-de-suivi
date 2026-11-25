@@ -29,11 +29,12 @@ farmsRouter.patch('/:farmId', h(async (c) => {
   await farmAccess(c, fid(c), 'manage');
   const b = parse(z.object({
     name: z.string().trim().min(2).max(150).optional(), locality: zOptText(150),
-    objective: z.enum(['meat', 'reproduction', 'mixed']).optional(), conduct_system: zOptText(300),
+    objective: z.enum(['meat', 'reproduction', 'mixed']).optional(), conduct_system: zOptText(300), ede_number: zOptText(30),
   }), c.req.body);
   const { rows } = await c.db.query(
-    `update farms set name = coalesce($2, name), locality = coalesce($3, locality), objective = coalesce($4, objective), conduct_system = $5 where id = $1 returning *`,
-    [fid(c), b.name ?? null, b.locality, b.objective ?? null, b.conduct_system]);
+    `update farms set name = coalesce($2, name), locality = coalesce($3, locality), objective = coalesce($4, objective), conduct_system = $5,
+       ede_number = case when $6::boolean then $7 else ede_number end where id = $1 returning *`,
+    [fid(c), b.name ?? null, b.locality, b.objective ?? null, b.conduct_system, 'ede_number' in (c.req.body ?? {}), b.ede_number]);
   await audit(c.db, { actor: c.user.id, action: 'farm.updated', resource: 'farm', resourceId: fid(c), farmId: fid(c), ip: c.ip });
   return rows[0];
 }));

@@ -30,6 +30,7 @@ const zAnimal = z.object({
   breed_code: z.string().max(40).nullable().optional(),
   breed_declared: zOptText(150),
   objective: z.enum(['meat', 'reproduction']).nullable().optional(),
+  species: z.enum(['ovine', 'caprine']).optional(),
   status: z.enum(['active', 'sold', 'dead', 'culled']).default('active'),
   exit_date: zDate.nullable().optional(),
   exit_reason: zOptText(300),
@@ -139,6 +140,7 @@ animalsRouter.post('/animals', h(async (c) => {
     `insert into animals (farm_id, internal_id, official_id, name, sex, birth_date, breed_code, breed_declared, objective, status, exit_date, exit_reason,
        sire_id, dam_id, sire_external, dam_external, parentage_source, parentage_certainty, lot_id, notes)
      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) returning *`, [fid(c), ...animalCols(b)]);
+  if (b.species) await c.db.query('update animals set species = $2 where id = $1', [rows[0].id, b.species]);
   await saveBirth(c, rows[0].id, b.birth);
   await audit(c.db, { actor: c.user.id, action: 'animal.created', resource: 'animal', resourceId: rows[0].id, farmId: fid(c), ip: c.ip });
   return rows[0];
@@ -206,6 +208,7 @@ animalsRouter.put('/animals/:id', h(async (c) => {
     `update animals set internal_id=$3, official_id=$4, name=$5, sex=$6, birth_date=$7, breed_code=$8, breed_declared=$9, objective=$10, status=$11,
        exit_date=$12, exit_reason=$13, sire_id=$14, dam_id=$15, sire_external=$16, dam_external=$17, parentage_source=$18, parentage_certainty=$19,
        lot_id=$20, notes=$21, updated_at = now() where id = $1 and farm_id = $2 returning *`, [before.id, fid(c), ...animalCols(b)]);
+  if (b.species) await c.db.query('update animals set species = $2 where id = $1', [before.id, b.species]);
   await saveBirth(c, before.id, b.birth);
   await recordHistory(c.db, { farmId: fid(c), table: 'animals', recordId: before.id, actor: c.user.id, action: 'update', before, after: rows[0], reason: b.reason });
   await audit(c.db, { actor: c.user.id, action: 'animal.updated', resource: 'animal', resourceId: before.id, farmId: fid(c), ip: c.ip });

@@ -38,19 +38,28 @@ export function SyncBar() {
 
 const farmNav: [string, string, IconName][] = [
   ['/', 'nav_home', 'home'], ['/herd', 'nav_herd', 'list'], ['/weigh', 'nav_weigh', 'scale'], ['/analytics', 'nav_analytics', 'chart'],
-  ['/feeding', 'nav_feeding', 'wheat'], ['/stock', 'nav_stock', 'box'], ['/boutique', 'nav_shop', 'cart'], ['/health', 'nav_health', 'health'], ['/repro', 'nav_repro', 'repro'], ['/simulateur', 'nav_simulator', 'dna'], ['/parcels', 'nav_parcels', 'grid'],
-  ['/members', 'nav_members', 'users'], ['/collective', 'nav_collective', 'globe'],
+  ['/feeding', 'nav_feeding', 'wheat'], ['/stock', 'nav_stock', 'box'], ['/boutique', 'nav_shop', 'cart'], ['/health', 'nav_health', 'health'], ['/parasitisme', 'nav_parasite', 'shield'], ['/repro', 'nav_repro', 'repro'], ['/simulateur', 'nav_simulator', 'dna'], ['/parcels', 'nav_parcels', 'grid'],
+  ['/members', 'nav_members', 'users'], ['/veterinaire', 'nav_vet_access', 'health'], ['/collective', 'nav_collective', 'globe'],
+];
+/** Pages visibles d'un vétérinaire en consultation, selon les portées accordées par l'éleveur. */
+const vetNav: [string, string, IconName, string][] = [
+  ['/parasitisme', 'nav_parasite', 'shield', 'health'], ['/herd', 'nav_herd', 'list', 'herd'], ['/analytics', 'nav_analytics', 'chart', 'herd'],
+  ['/health', 'nav_health', 'health', 'health'], ['/repro', 'nav_repro', 'repro', 'repro'], ['/feeding', 'nav_feeding', 'wheat', 'feeding'],
 ];
 
 export function Layout({ children }: { children: ReactNode }) {
   const { t, me, farm, setFarmId, logout } = useApp();
   const [menu, setMenu] = useState(false);
   const [sheet, setSheet] = useState(false);
-  const canWrite = !!farm && farm.role !== 'referent';
+  const canWrite = !!farm && farm.role !== 'referent' && farm.role !== 'vet';
   const role = me?.user?.platform_role;
   const hasFarm = !!farm;
+  const isVet = farm?.role === 'vet';
+  const scopes = farm?.scopes ?? [];
   const links: [string, string, IconName][] = [
-    ...(hasFarm ? farmNav : [['/', 'nav_home', 'home'] as [string, string, IconName]]),
+    ...(me?.vet ? [['/veto', 'nav_vet_space', 'health'] as [string, string, IconName]] : []),
+    ...(isVet ? vetNav.filter((x) => scopes.includes(x[3])).map((x) => [x[0], x[1], x[2]] as [string, string, IconName])
+      : hasFarm ? farmNav.filter((x) => x[0] !== '/veterinaire' || farm?.role === 'owner') : [['/', 'nav_home', 'home'] as [string, string, IconName]]),
     ...(!hasFarm && role === 'analyst' ? [['/collective', 'nav_collective', 'globe'] as [string, string, IconName]] : []),
     ...(role === 'admin' || role === 'validator' ? [['/review', 'nav_review', 'shield'] as [string, string, IconName]] : []),
     ...(role === 'admin' ? [['/admin', 'nav_admin', 'gear'] as [string, string, IconName]] : []),
@@ -88,7 +97,13 @@ export function Layout({ children }: { children: ReactNode }) {
         <main className="main">{children}</main>
       </div>
       <nav className="tabbar" aria-label="Navigation mobile">
-        {hasFarm ? (
+        {isVet ? (
+          <>
+            {tab('/veto', 'nav_vet_space', 'health')}
+            {scopes.includes('health') && tab('/parasitisme', 'nav_parasite', 'shield')}
+            {scopes.includes('herd') && tab('/herd', 'nav_herd', 'list')}
+          </>
+        ) : hasFarm ? (
           <>
             {tab('/', 'nav_home', 'home')}
             {tab('/herd', 'nav_herd', 'list')}

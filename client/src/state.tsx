@@ -6,7 +6,8 @@ import { clearQueue } from './offline';
 export type Me = {
   user: null | { id: string; email: string; first_name: string; last_name: string; lang: Lang; platform_role: 'none' | 'admin' | 'validator' | 'analyst'; email_verified: boolean; mfa_enabled: boolean };
   mfa_verified?: boolean;
-  farms?: { id: string; name: string; status: string; territory_code: string; role: 'owner' | 'collaborator' | 'referent' }[];
+  farms?: { id: string; name: string; status: string; territory_code: string; role: 'owner' | 'collaborator' | 'referent' | 'vet'; scopes?: string[]; expires_at?: string }[];
+  vet?: { ordinal_number: string; clinic: string; territory_code: string | null; phone: string | null; status: 'pending' | 'verified' | 'rejected' | 'suspended'; decision_note: string | null } | null;
   registration?: { id: string; status: string } | null;
   invitations?: { id: string; role: string; farm_name: string }[];
   unread_notifications?: number;

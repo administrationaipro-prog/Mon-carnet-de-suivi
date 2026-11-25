@@ -27,7 +27,7 @@ export function Herd() {
         <h1>{t('herd_title')}</h1>
         <div className="row">
           <button className="btn" onClick={() => downloadUrl(`/api/farms/${farm.id}/export/animals.csv`)}>{t('export_csv')}</button>
-          {farm.role !== 'referent' && <Link className="btn primary" to="/herd/new">＋ {t('add_animal')}</Link>}
+          {farm.role !== 'referent' && farm.role !== 'vet' && <Link className="btn primary" to="/herd/new">＋ {t('add_animal')}</Link>}
         </div>
       </div>
       <Card>
@@ -64,7 +64,7 @@ export function Herd() {
 }
 
 const blank = {
-  internal_id: '', official_id: '', name: '', sex: 'F', birth_date: '', breed_code: '', breed_declared: '', objective: '', status: 'active', exit_date: '', exit_reason: '',
+  internal_id: '', official_id: '', name: '', species: 'ovine', sex: 'F', birth_date: '', breed_code: '', breed_declared: '', objective: '', status: 'active', exit_date: '', exit_reason: '',
   sire_id: '', dam_id: '', sire_external: '', dam_external: '', parentage_source: '', parentage_certainty: '', lot_id: '', notes: '',
   litter_size: '', birth_weight_kg: '', vitality: '', colostrum: '', assistance: '', reason: '',
 };
@@ -90,7 +90,7 @@ export function AnimalForm() {
     const n = (v: string) => strOrNull(v);
     const hasBirth = f.litter_size || f.birth_weight_kg || f.vitality || f.colostrum || f.assistance;
     const body = {
-      internal_id: f.internal_id.trim(), official_id: n(f.official_id), name: n(f.name), sex: f.sex, birth_date: n(f.birth_date), breed_code: n(f.breed_code),
+      internal_id: f.internal_id.trim(), official_id: n(f.official_id), name: n(f.name), species: f.species || 'ovine', sex: f.sex, birth_date: n(f.birth_date), breed_code: n(f.breed_code),
       breed_declared: n(f.breed_declared), objective: n(f.objective), status: f.status, exit_date: f.status === 'active' ? null : n(f.exit_date), exit_reason: f.status === 'active' ? null : n(f.exit_reason),
       sire_id: n(f.sire_id), dam_id: n(f.dam_id), sire_external: f.sire_id ? null : n(f.sire_external), dam_external: f.dam_id ? null : n(f.dam_external),
       parentage_source: n(f.parentage_source), parentage_certainty: n(f.parentage_certainty), lot_id: n(f.lot_id), notes: n(f.notes), reason: n(f.reason),
@@ -116,6 +116,7 @@ export function AnimalForm() {
           <Field label={t('internal_id')} required><input required maxLength={50} value={f.internal_id} onChange={up('internal_id')} /></Field>
           <Field label={t('official_id')}><input maxLength={50} value={f.official_id} onChange={up('official_id')} /></Field>
           <Field label={t('animal_name')}><input maxLength={100} value={f.name} onChange={up('name')} /></Field>
+          <Field label={t('species')} required><select value={f.species} onChange={up('species')}><option value="ovine">{t('species.ovine')}</option><option value="caprine">{t('species.caprine')}</option></select></Field>
           <Field label={t('sex')} required><select value={f.sex} onChange={up('sex')}><option value="F">{t('sex.F')}</option><option value="M">{t('sex.M')}</option></select></Field>
           <Field label={t('birth_date')}><input type="date" max={todayIso()} value={f.birth_date} onChange={up('birth_date')} /></Field>
           <Field label={t('breed')}><select value={f.breed_code} onChange={up('breed_code')}><option value="">—</option>{breeds.map((b) => <option key={b.code} value={b.code}>{label(b.code)}</option>)}</select></Field>

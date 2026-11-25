@@ -29,6 +29,12 @@ export const config = {
   brevoApiUrl: process.env.BREVO_API_URL ?? 'https://api.brevo.com/v3/smtp/email',
   mailFromEmail: process.env.MAIL_FROM_EMAIL || null,
   mailFromName: process.env.MAIL_FROM_NAME ?? 'Carnet de suivi',
+  // SMS (code de signature) : expéditeur Brevo, 11 caractères alphanumériques max. Sans lui, le code part par courriel.
+  smsSender: process.env.BREVO_SMS_SENDER || null,
+  brevoSmsUrl: process.env.BREVO_SMS_URL ?? 'https://api.brevo.com/v3/transactionalSMS/sms',
+  // Lecture automatique des comptes rendus de laboratoire (API Claude)
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY || null,
+  aiModel: process.env.AI_MODEL ?? 'claude-opus-5-5',
   // Cookie « Secure » dès que l’URL publique est en HTTPS (obligatoire en production réelle)
   cookieSecure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : publicUrl.startsWith('https://'),
 };

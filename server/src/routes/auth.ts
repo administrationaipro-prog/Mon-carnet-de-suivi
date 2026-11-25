@@ -119,6 +119,17 @@ authRouter.get('/me', h(async (c) => {
   const farms = await c.db.query(
     `select f.id, f.name, f.status, f.territory_code, m.role from memberships m join farms f on f.id = m.farm_id
       where m.user_id = $1 and m.status = 'active' order by f.name`, [c.user.id]);
+  const vet = (await c.db.query('select ordinal_number, clinic, territory_code, phone, status, decision_note from vet_profiles where user_id = $1', [c.user.id])).rows[0] ?? null;
+  if (vet?.status === 'verified') {
+    const grants = await c.db.query(
+      `select f.id, f.name, f.status, f.territory_code, 'vet' as role, va.scopes, va.expires_at
+         from vet_access va join farms f on f.id = va.farm_id
+        where va.vet_id = $1 and va.revoked_at is null and va.expires_at > now() and f.status = 'active'
+          and not exists (select 1 from memberships m where m.farm_id = f.id and m.user_id = $1 and m.status = 'active')
+        order by f.name`, [c.user.id]);
+    const seen = new Set<string>();
+    for (const g of grants.rows) if (!seen.has(g.id)) { seen.add(g.id); farms.rows.push(g); }
+  }
   const reg = await c.db.query('select id, status from registration_requests where user_id = $1 order by created_at desc limit 1', [c.user.id]);
   const invites = await c.db.query(
     `select i.id, i.role, f.name as farm_name from invitations i join farms f on f.id = i.farm_id
@@ -126,7 +137,7 @@ authRouter.get('/me', h(async (c) => {
   const unread = await c.db.query('select count(*)::int n from notifications where user_id = $1 and read_at is null', [c.user.id]);
   return {
     user: publicUser(c.user), mfa_verified: !!c.session?.mfa_verified,
-    farms: farms.rows, registration: reg.rows[0] ?? null, invitations: invites.rows, unread_notifications: unread.rows[0].n,
+    farms: farms.rows, vet, registration: reg.rows[0] ?? null, invitations: invites.rows, unread_notifications: unread.rows[0].n,
   };
 }, { auth: 'none' }));
 

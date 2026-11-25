@@ -4,8 +4,8 @@ import { useApp } from '../state';
 import { Icon, type IconName } from './Icon';
 
 const ACTIONS: [string, string, IconName, string][] = [
-  ['/weigh', 'v3_act_weigh', 'scale', ''], ['/health', 'v3_act_health', 'health', 'blue'], ['/repro', 'v3_act_repro', 'repro', 'gold'],
-  ['/simulateur', 'v3_act_mating', 'dna', 'plum'], ['/feeding', 'v3_act_feed', 'wheat', 'grey'], ['/stock', 'v3_act_stock', 'box', 'grey'],
+  ['/weigh', 'v3_act_weigh', 'scale', ''], ['/parasitisme/tournee', 'v3_act_parasite', 'shield', 'red'], ['/health', 'v3_act_health', 'health', 'blue'], ['/repro', 'v3_act_repro', 'repro', 'gold'],
+  ['/simulateur', 'v3_act_mating', 'dna', 'plum'], ['/feeding', 'v3_act_feed', 'wheat', 'grey'],
 ];
 
 /** Feuille d’actions du bouton « + » : toutes les saisies en un geste, depuis n’importe quel écran. */

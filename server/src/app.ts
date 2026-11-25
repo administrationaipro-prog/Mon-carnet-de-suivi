@@ -4,7 +4,9 @@ import helmet from 'helmet';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadSession, csrf, errorHandler } from './http.js';
+import { loadSession, csrf, errorHandler, vetScopeGuard } from './http.js';
+import { vetRouter, farmVetRouter, adminVetRouter, publicVerifyRouter } from './routes/vet.js';
+import { parasiteRouter } from './routes/parasite.js';
 import { authRouter } from './routes/auth.js';
 import { registrationRouter } from './routes/registration.js';
 import { farmsRouter, invitationsRouter } from './routes/farms.js';
@@ -29,7 +31,9 @@ export function createApp() {
     crossOriginEmbedderPolicy: false,
     strictTransportSecurity: config.cookieSecure,
   }));
-  app.use(express.json({ limit: '1mb' }));
+  // Gros corps JSON (fichier encodé) réservé à l'import du compte rendu de laboratoire
+  const bigJson = express.json({ limit: '30mb' }), smallJson = express.json({ limit: '1mb' });
+  app.use((req, res, next) => (/\/copro\/[0-9a-f-]{36}\/import$/.test(req.path) ? bigJson : smallJson)(req, res, next));
   app.use(cookieParser());
 
   const api = express.Router();
@@ -44,7 +48,13 @@ export function createApp() {
   api.use('/ref', refRouter);
   api.use('/registration', registrationRouter);
   api.use('/invitations', invitationsRouter);
+  api.use('/farms/:farmId', vetScopeGuard);
   api.use('/farms/:farmId', animalsRouter);
+  api.use('/farms/:farmId', parasiteRouter);
+  api.use('/farms/:farmId', farmVetRouter);
+  api.use('/vet', vetRouter);
+  api.use('/admin/vets', adminVetRouter);
+  api.use('/public', publicVerifyRouter);
   api.use('/farms/:farmId', analyticsRouter);
   api.use('/farms/:farmId', matingRouter);
   api.use('/farms/:farmId', stockRouter);

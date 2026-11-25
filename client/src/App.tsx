@@ -20,6 +20,8 @@ import { Admin, AdminFarmView } from './pages/Admin';
 import { InstallPage } from './components/Install';
 import { AuthShell } from './pages/Auth';
 import { Icon } from './components/Icon';
+import { VetSpace, FarmVetAccess, VerifyPage } from './pages/Vet';
+import { ParasiteHome, ExamTour, ParasiteSettingsPage, CoproPage } from './pages/Parasite';
 
 function AdminFarm() { const { id } = useParams(); return <AdminFarmView id={id!} />; }
 
@@ -31,6 +33,7 @@ function Routed() {
       <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/verifier/:number" element={me.user && me.user.email_verified ? <VerifyPage /> : <AuthShell title={t('verify_doc_title')}><VerifyPage /></AuthShell>} />
       <Route path="/installer" element={me.user && me.user.email_verified ? <InstallPage /> : <AuthShell title={`📲 ${t('install_title')}`}><InstallPage embedded /></AuthShell>} />
     </>
   );
@@ -68,6 +71,12 @@ function Routed() {
         <Route path="/parcels" element={needFarm(<Parcels />)} />
         <Route path="/members" element={needFarm(<Members />)} />
         <Route path="/collective" element={farm || role === 'analyst' || role === 'admin' ? <Collective /> : <Navigate to="/" replace />} />
+        <Route path="/parasitisme" element={needFarm(<ParasiteHome />)} />
+        <Route path="/parasitisme/tournee" element={needFarm(<ExamTour />)} />
+        <Route path="/parasitisme/seuils/:species" element={needFarm(<ParasiteSettingsPage />)} />
+        <Route path="/parasitisme/copro/:id" element={needFarm(<CoproPage />)} />
+        <Route path="/veterinaire" element={needFarm(<FarmVetAccess />)} />
+        <Route path="/veto" element={<VetSpace />} />
         <Route path="/account" element={<Account />} />
         <Route path="/notifications" element={<Notifications />} />
         {(role === 'admin' || role === 'validator') && <Route path="/review" element={<ReviewList />} />}

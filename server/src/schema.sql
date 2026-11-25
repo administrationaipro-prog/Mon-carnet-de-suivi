@@ -447,10 +447,196 @@ create table if not exists orders (
 );
 create index if not exists orders_farm on orders(farm_id, created_at desc);
 
+
+-- ===================== Vétérinaires, parasitisme, coproscopie =====================
+alter table animals add column if not exists species text not null default 'ovine';
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'animals_species_check') then
+    alter table animals add constraint animals_species_check check (species in ('ovine','caprine'));
+  end if;
+end $$;
+alter table farms add column if not exists ede_number text;
+
+-- Profil vétérinaire : vérifié par l'administrateur (n° d'inscription à l'Ordre) avant toute signature
+create table if not exists vet_profiles (
+  user_id uuid primary key references users(id) on delete cascade,
+  ordinal_number text not null,
+  clinic text not null,
+  territory_code text references territories(code),
+  phone text,
+  status text not null default 'pending' check (status in ('pending','verified','rejected','suspended')),
+  decision_note text,
+  decided_by uuid references users(id),
+  decided_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+-- Accès de consultation accordé par l'éleveur (portées, durée, révocable)
+create table if not exists vet_access (
+  id uuid primary key default gen_random_uuid(),
+  farm_id uuid not null references farms(id) on delete cascade,
+  vet_id uuid not null references users(id) on delete cascade,
+  scopes text[] not null,
+  expires_at timestamptz not null,
+  revoked_at timestamptz,
+  granted_by uuid references users(id),
+  created_at timestamptz not null default now()
+);
+create index if not exists vet_access_vet on vet_access(vet_id, expires_at);
+create index if not exists vet_access_farm on vet_access(farm_id, expires_at);
+
+-- Code à usage unique montré au vétérinaire sur place (15 min)
+create table if not exists vet_access_codes (
+  id uuid primary key default gen_random_uuid(),
+  farm_id uuid not null references farms(id) on delete cascade,
+  code_hash text not null,
+  scopes text[] not null,
+  duration_hours integer not null,
+  created_by uuid references users(id),
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  used_by uuid references users(id),
+  attempts integer not null default 0
+);
+
+-- Codes de confirmation de signature (SMS ou courriel)
+create table if not exists sign_codes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  purpose text not null,
+  target_id text not null,
+  code_hash text not null,
+  channel text not null,
+  expires_at timestamptz not null,
+  attempts integer not null default 0,
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+-- Seuils parasitaires : valeurs par défaut tant qu'aucun avis vétérinaire signé
+create table if not exists parasite_settings (
+  farm_id uuid not null references farms(id) on delete cascade,
+  species text not null check (species in ('ovine','caprine')),
+  vals jsonb not null,
+  comment text,
+  vet_id uuid references users(id),
+  vet_name text,
+  vet_ordinal text,
+  signature_png text,
+  validated_at timestamptz,
+  version integer not null default 1,
+  primary key (farm_id, species)
+);
+create table if not exists parasite_settings_history (
+  id bigserial primary key,
+  farm_id uuid not null references farms(id) on delete cascade,
+  species text not null,
+  vals jsonb not null,
+  comment text,
+  vet_id uuid references users(id),
+  vet_name text,
+  vet_ordinal text,
+  validated_at timestamptz not null,
+  version integer not null
+);
+
+-- Examen parasitaire « 5 points » (FAMACHA, état corporel, diarrhée, mâchoire, nez)
+create table if not exists parasite_exams (
+  id uuid primary key default gen_random_uuid(),
+  farm_id uuid not null,
+  animal_id uuid not null,
+  date date not null,
+  famacha smallint check (famacha between 1 and 5),
+  bcs numeric(2,1) check (bcs between 1 and 5),
+  dag smallint check (dag between 0 and 3),
+  jaw_edema boolean not null default false,
+  nasal boolean not null default false,
+  decision text not null check (decision in ('treat','watch','none')),
+  reasons text[] not null default '{}',
+  note text,
+  author_id uuid references users(id),
+  created_at timestamptz not null default now(),
+  foreign key (animal_id, farm_id) references animals(id, farm_id) on delete cascade
+);
+create index if not exists parasite_exams_farm_date on parasite_exams(farm_id, date desc);
+
+-- Fichiers (PDF source du laboratoire, rapports signés) : stockés en base, empreinte SHA-256
+create table if not exists files (
+  id uuid primary key default gen_random_uuid(),
+  farm_id uuid not null references farms(id) on delete cascade,
+  kind text not null check (kind in ('copro_source','copro_signed')),
+  name text not null,
+  mime text not null,
+  size integer not null,
+  sha256 text not null,
+  data bytea not null,
+  uploaded_by uuid references users(id),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists copro_reports (
+  id uuid primary key default gen_random_uuid(),
+  farm_id uuid not null references farms(id) on delete cascade,
+  number text not null unique,
+  phase text not null default 'J0' check (phase in ('J0','J14','other')),
+  parent_id uuid references copro_reports(id),
+  species text not null default 'ovine' check (species in ('ovine','caprine')),
+  sample_date date not null,
+  sample_mode text,
+  reason text,
+  status text not null default 'draft' check (status in ('draft','signed')),
+  vet_id uuid references users(id),
+  lab_name text,
+  lab_ref text,
+  received_date date,
+  method text,
+  detection_limit integer,
+  lab_comment text,
+  interpretation text,
+  source_file_id uuid references files(id),
+  ai_extraction jsonb,
+  signature_png text,
+  signed_at timestamptz,
+  signed_vet_name text,
+  signed_vet_ordinal text,
+  signed_clinic text,
+  pdf_file_id uuid references files(id),
+  content_hash text,
+  farmer_ack_at timestamptz,
+  farmer_ack_by uuid references users(id),
+  created_by uuid references users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create table if not exists copro_results (
+  id uuid primary key default gen_random_uuid(),
+  report_id uuid not null references copro_reports(id) on delete cascade,
+  farm_id uuid not null,
+  animal_id uuid,
+  raw_label text,
+  famacha smallint,
+  bcs numeric(2,1),
+  strongyles_epg integer check (strongyles_epg >= 0),
+  nematodirus_epg integer check (nematodirus_epg >= 0),
+  coccidia text,
+  confidence text check (confidence in ('high','medium','low')),
+  corrected boolean not null default false,
+  position integer not null default 0,
+  foreign key (animal_id, farm_id) references animals(id, farm_id)
+);
+create sequence if not exists copro_number_seq;
+
 -- ===================== Row-Level Security =====================
 
 create or replace function app_uid() returns uuid language sql stable as $$
   select nullif(current_setting('app.user_id', true), '')::uuid
+$$;
+
+-- Vétérinaire vérifié disposant d'un accès de consultation en cours
+create or replace function app_vet_can(f uuid) returns boolean language sql stable as $$
+  select exists (select 1 from vet_access va join vet_profiles vp on vp.user_id = va.vet_id join farms fa on fa.id = va.farm_id
+                 where va.farm_id = f and va.vet_id = app_uid() and va.revoked_at is null and va.expires_at > now()
+                   and vp.status = 'verified' and fa.status = 'active')
 $$;
 
 create or replace function app_can_read(f uuid) returns boolean language sql stable as $$
@@ -459,6 +645,7 @@ create or replace function app_can_read(f uuid) returns boolean language sql sta
             where m.farm_id = f and m.user_id = app_uid() and m.status = 'active' and fa.status = 'active')
     or exists (select 1 from admin_access_grants g
                where g.farm_id = f and g.admin_id = app_uid() and g.expires_at > now())
+    or app_vet_can(f)
     or (current_setting('app.ctx', true) = 'aggregate'
         and exists (select 1 from consents c join farms fa on fa.id = c.farm_id
                     where c.farm_id = f and fa.status = 'active' and c.purpose = 'collective_stats'
@@ -514,6 +701,48 @@ drop policy if exists p_update on orders;
 create policy p_read on orders for select using (app_can_read(farm_id) or app_is_admin());
 create policy p_insert on orders for insert with check (app_can_write(farm_id));
 create policy p_update on orders for update using (app_can_write(farm_id) or app_is_admin()) with check (app_can_write(farm_id) or app_is_admin());
+
+
+-- Parasitisme et coproscopie : lecture par l'exploitation (et le vétérinaire en consultation),
+-- écriture par l'exploitation ou par le vétérinaire en consultation (signature contrôlée par l'API).
+do $$
+declare t text;
+begin
+  foreach t in array array['parasite_exams','parasite_settings','parasite_settings_history','files','copro_reports','copro_results']
+  loop
+    execute format('alter table %I enable row level security', t);
+    execute format('alter table %I force row level security', t);
+    execute format('drop policy if exists p_read on %I', t);
+    execute format('drop policy if exists p_write on %I', t);
+    execute format('create policy p_read on %I for select using (app_can_read(farm_id))', t);
+    execute format('create policy p_write on %I for all using (app_can_write(farm_id) or app_vet_can(farm_id)) with check (app_can_write(farm_id) or app_vet_can(farm_id))', t);
+  end loop;
+end $$;
+
+-- Un rapport signé est figé : seule la prise de connaissance de l'éleveur peut encore être enregistrée.
+create or replace function copro_signed_guard() returns trigger language plpgsql as $$
+begin
+  if tg_table_name = 'copro_reports' then
+    if old.status = 'signed' and (tg_op = 'DELETE' or (to_jsonb(new) - 'farmer_ack_at' - 'farmer_ack_by' - 'updated_at')
+                                      is distinct from (to_jsonb(old) - 'farmer_ack_at' - 'farmer_ack_by' - 'updated_at')) then
+      raise exception 'report_signed' using errcode = '55000';
+    end if;
+  else
+    if exists (select 1 from copro_reports r where r.status = 'signed'
+               and r.id = case when tg_op = 'INSERT' then new.report_id else old.report_id end) then
+      raise exception 'report_signed' using errcode = '55000';
+    end if;
+  end if;
+  return coalesce(new, old);
+end $$;
+drop trigger if exists copro_reports_guard on copro_reports;
+create trigger copro_reports_guard before update or delete on copro_reports for each row execute function copro_signed_guard();
+drop trigger if exists copro_results_guard on copro_results;
+create trigger copro_results_guard before insert or update or delete on copro_results for each row execute function copro_signed_guard();
+
+-- Page publique « Vérifier un document » : uniquement les rapports signés, dans une transaction app.ctx = 'verify'
+drop policy if exists p_verify on copro_reports;
+create policy p_verify on copro_reports for select using (current_setting('app.ctx', true) = 'verify' and status = 'signed');
 
 -- ===================== Référentiels =====================
 

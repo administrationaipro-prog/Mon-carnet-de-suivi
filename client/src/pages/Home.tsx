@@ -7,6 +7,7 @@ import { Icon, type IconName } from '../components/Icon';
 import { useApp } from '../state';
 import { Card, ErrorMsg, Loading, Notice, Stat, useLoad, useSubmit, Badge } from '../components/ui';
 import { Registration } from './Registration';
+import { VetSpace, VetProfileForm } from './Vet';
 
 export function Invitations() {
   const { t, me, refresh } = useApp();
@@ -166,6 +167,23 @@ function HomeSearch() {
   );
 }
 
+/** Nouveau compte : éleveur (dossier d'inscription) ou vétérinaire (profil vérifié par la plateforme). */
+function ProfileChoice() {
+  const { t, me } = useApp();
+  const [kind, setKind] = useState<'farmer' | 'vet'>(me?.registration ? 'farmer' : 'farmer');
+  return (
+    <div className="stack">
+      {!me?.registration && (
+        <div className="role-pick" role="group" aria-label={t('profile_choice')}>
+          <button type="button" className={kind === 'farmer' ? 'on' : ''} aria-pressed={kind === 'farmer'} onClick={() => setKind('farmer')}><span>🐑</span>{t('profile_farmer')}</button>
+          <button type="button" className={kind === 'vet' ? 'on' : ''} aria-pressed={kind === 'vet'} onClick={() => setKind('vet')}><span>🩺</span>{t('profile_vet')}</button>
+        </div>
+      )}
+      {kind === 'farmer' ? <Registration /> : <Card title={t('vet_create_title')}><p className="small muted" style={{ marginTop: 0 }}>{t('vet_create_intro')}</p><VetProfileForm /></Card>}
+    </div>
+  );
+}
+
 export function Home() {
   const { t, me, farm, d, num, lang } = useApp();
   const dash = useLoad<any>(farm ? `/farms/${farm.id}/dashboard` : null, [farm?.id]);
@@ -175,6 +193,7 @@ export function Home() {
   const tasks = useTasks(dash.data?.alerts ?? []);
   const role = me?.user?.platform_role;
 
+  if (me?.vet && (!farm || farm.role === 'vet')) return <VetSpace />;
   if (!farm) {
     return (
       <div className="stack">
@@ -182,11 +201,11 @@ export function Home() {
         {(role === 'admin' || role === 'validator') && <Notice>{t('no_farm')} <Link to="/review">{t('review_title')} →</Link></Notice>}
         {role === 'admin' && <CreateOwnFarm />}
         {role === 'analyst' && <Notice><Link to="/collective">{t('collective_stats')} →</Link></Notice>}
-        {role === 'none' && <Registration />}
+        {role === 'none' && <ProfileChoice />}
       </div>
     );
   }
-  const canWrite = farm.role !== 'referent';
+  const canWrite = farm.role !== 'referent' && farm.role !== 'vet';
   const g = dash.data?.growth;
   const today = new Date().toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   const lambings = (dash.data?.alerts ?? []).filter((a: any) => a.type === 'lambing_expected').length;

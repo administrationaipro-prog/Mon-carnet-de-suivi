@@ -112,7 +112,7 @@ export function Stock() {
   const [hist, setHist] = useState<any | null>(null);
   const archive = useSubmit(async (id: string) => { await del(`/farms/${farm!.id}/stock/${id}`); list.reload(); });
   if (!farm) return null;
-  const canWrite = farm.role !== 'referent';
+  const canWrite = farm.role !== 'referent' && farm.role !== 'vet';
   const prods = products.data ?? [];
   return (
     <div className="stack">

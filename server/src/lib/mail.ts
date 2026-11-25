@@ -36,6 +36,30 @@ const T: Record<string, Record<Lang, (p: any) => { subject: string; body: string
     fr: (p) => ({ subject: `Votre commande : ${p.statusFr}`, body: `Commande de ${p.quantity} × ${p.product} : ${p.statusFr}.${p.delivery_date ? `\nLivraison : ${fmtFr(p.delivery_date)}.` : ''}${p.note ? `\nMessage : ${p.note}` : ''}\n\nSuivi dans la boutique : ${config.publicUrl}/boutique` }),
     en: (p) => ({ subject: `Your order: ${p.statusEn}`, body: `Order of ${p.quantity} × ${p.product}: ${p.statusEn}.${p.delivery_date ? `\nDelivery: ${p.delivery_date}.` : ''}${p.note ? `\nMessage: ${p.note}` : ''}\n\nTrack it in the shop: ${config.publicUrl}/boutique` }),
   },
+  vet_profile_submitted: {
+    fr: (p) => ({ subject: 'Compte vétérinaire à vérifier', body: `${p.name} demande un compte vétérinaire (n° d’inscription à l’Ordre : ${p.ordinal}, ${p.clinic}).\nVérifiez son inscription dans l’annuaire de l’Ordre puis décidez dans Administration → Vétérinaires : ${config.publicUrl}/admin` }),
+    en: (p) => ({ subject: 'Veterinarian account to verify', body: `${p.name} requests a veterinarian account (registration no. ${p.ordinal}, ${p.clinic}).\nCheck the registration then decide in Administration → Veterinarians: ${config.publicUrl}/admin` }),
+  },
+  vet_decision: {
+    fr: (p) => ({ subject: p.status === 'verified' ? 'Votre compte vétérinaire est vérifié' : 'Votre compte vétérinaire', body: p.status === 'verified' ? `Votre inscription a été vérifiée. Vous pouvez désormais consulter les exploitations qui vous donnent accès, donner votre avis et signer les rapports : ${config.publicUrl}/veto` : `Statut de votre compte vétérinaire : ${p.status}.${p.note ? `\nMotif : ${p.note}` : ''}` }),
+    en: (p) => ({ subject: 'Your veterinarian account', body: p.status === 'verified' ? `Your registration has been verified. You can now access the farms that grant you access, give your opinion and sign reports: ${config.publicUrl}/veto` : `Your veterinarian account status: ${p.status}.${p.note ? `\nReason: ${p.note}` : ''}` }),
+  },
+  vet_access_granted: {
+    fr: (p) => ({ subject: `Accès de consultation : ${p.farm}`, body: `${p.by} vous donne accès à l’exploitation « ${p.farm} » jusqu’au ${p.until}.\nOuvrir l’espace vétérinaire : ${config.publicUrl}/veto` }),
+    en: (p) => ({ subject: `Consultation access: ${p.farm}`, body: `${p.by} gives you access to the farm “${p.farm}” until ${p.until}.\nOpen the veterinarian area: ${config.publicUrl}/veto` }),
+  },
+  sign_code: {
+    fr: (p) => ({ subject: `Code de signature : ${p.code}`, body: `Votre code de confirmation pour signer ${p.what} : ${p.code}\nValable 10 minutes. Ne le communiquez à personne.` }),
+    en: (p) => ({ subject: `Signing code: ${p.code}`, body: `Your confirmation code to sign ${p.what}: ${p.code}\nValid for 10 minutes. Do not share it.` }),
+  },
+  copro_signed: {
+    fr: (p) => ({ subject: `Rapport de coproscopie signé : ${p.number}`, body: `${p.vet} a signé le rapport de coproscopie ${p.number} (${p.farm}).\nConsulter et télécharger le PDF : ${config.publicUrl}/parasitisme/copro/${p.id}\nVérifier l’authenticité : ${config.publicUrl}/verifier/${p.number}` }),
+    en: (p) => ({ subject: `Faecal egg count report signed: ${p.number}`, body: `${p.vet} signed the report ${p.number} (${p.farm}).\nView and download the PDF: ${config.publicUrl}/parasitisme/copro/${p.id}\nCheck authenticity: ${config.publicUrl}/verifier/${p.number}` }),
+  },
+  settings_signed: {
+    fr: (p) => ({ subject: 'Avis vétérinaire sur le protocole parasitaire', body: `${p.vet} a validé les seuils parasitaires (${p.species}) de « ${p.farm} ».\nConsulter : ${config.publicUrl}/parasitisme` }),
+    en: (p) => ({ subject: 'Veterinary opinion on the parasite protocol', body: `${p.vet} validated the parasite thresholds (${p.species}) of “${p.farm}”.\nView: ${config.publicUrl}/parasitisme` }),
+  },
   new_request: {
     fr: (p) => ({ subject: 'Nouvelle demande d’inscription à examiner', body: `Une demande (${p.territory}) vous est affectée. Connectez-vous à l’espace de validation.` }),
     en: (p) => ({ subject: 'New registration request to review', body: `A request (${p.territory}) has been assigned to you. Sign in to the review area.` }),
