@@ -603,6 +603,26 @@ describe('Boutique : réserve fournisseur, commandes et livraison', () => {
     expect((await post(ref, `/api/farms/${A.farmId}/orders`, { product_id: hay.id, quantity: 1 })).body.error).toBe('read_only');
     expect((await ref.get(`/api/farms/${A.farmId}/stock`)).status).toBe(200);
   });
+  it('suppression d’un fournisseur : refusée si commande en cours, archivage si historique, définitive sinon', async () => {
+    expect((await del(A, `/api/admin/shop/suppliers/${supplier.id}`)).status).toBe(403);
+    // commande en cours → refus
+    const open = (await post(A, `/api/farms/${A.farmId}/orders`, { product_id: hay.id, quantity: 1 })).body;
+    const r1 = await del(admin, `/api/admin/shop/suppliers/${supplier.id}`);
+    expect(r1.status).toBe(409);
+    expect(r1.body).toMatchObject({ error: 'has_open_orders', details: { open: 1 } });
+    await post(A, `/api/farms/${A.farmId}/orders/${open.id}/cancel`);
+    // historique de commandes → archivé : retiré de la boutique, commandes et stock conservés
+    expect((await del(admin, `/api/admin/shop/suppliers/${supplier.id}`)).body).toEqual({ result: 'archived' });
+    expect((await A.get(`/api/shop/products?farm=${A.farmId}`)).body.find((p: any) => p.id === hay.id)).toBeUndefined();
+    expect((await A.get(`/api/farms/${A.farmId}/orders`)).body.length).toBeGreaterThanOrEqual(2);
+    // fournisseur sans aucune commande → supprimé définitivement avec ses produits
+    const s2 = (await post(admin, '/api/admin/shop/suppliers', { name: 'Fournisseur en double' })).body;
+    const p2 = (await post(admin, '/api/admin/shop/products', { supplier_id: s2.id, name: 'Grains', category: 'grain', unit: 'sac', reserved_quantity: 5 })).body;
+    expect((await del(admin, `/api/admin/shop/products/${p2.id}`)).body).toEqual({ result: 'deleted' });
+    expect((await del(admin, `/api/admin/shop/suppliers/${s2.id}`)).body).toEqual({ result: 'deleted' });
+    expect((await admin.get('/api/admin/shop/suppliers')).body.map((x: any) => x.id)).not.toContain(s2.id);
+    expect((await del(admin, `/api/admin/shop/suppliers/${s2.id}`)).status).toBe(404);
+  });
 });
 
 describe('Droits RGPD', () => {

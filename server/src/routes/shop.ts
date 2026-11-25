@@ -90,6 +90,43 @@ adminShopRouter.put('/products/:id', h(async (c) => {
   return rows[0];
 }));
 
+/**
+ * Suppression : refusée tant qu'une commande est en cours (demandée ou confirmée).
+ * Sans aucune commande passée : suppression définitive. Avec un historique de commandes :
+ * archivage (retiré de la boutique, historique des éleveurs conservé).
+ */
+async function removeProducts(c: Ctx, where: string, id: string) {
+  const open = (await c.db.query(`select count(*)::int as n from orders o join products p on p.id = o.product_id where ${where} and o.status in ('requested','confirmed')`, [id])).rows[0].n;
+  if (open > 0) throw conflict('has_open_orders', { open });
+  const past = (await c.db.query(`select count(*)::int as n from orders o join products p on p.id = o.product_id where ${where}`, [id])).rows[0].n;
+  return past;
+}
+adminShopRouter.delete('/suppliers/:id', h(async (c) => {
+  requirePlatform(c, 'admin');
+  const sup = (await c.db.query('select * from suppliers where id = $1 for update', [c.req.params.id])).rows[0];
+  if (!sup) throw notFound();
+  const past = await removeProducts(c, 'p.supplier_id = $1', sup.id);
+  if (past > 0) {
+    await c.db.query('update products set active = false where supplier_id = $1', [sup.id]);
+    await c.db.query('update suppliers set active = false where id = $1', [sup.id]);
+  } else {
+    await c.db.query('delete from products where supplier_id = $1', [sup.id]);
+    await c.db.query('delete from suppliers where id = $1', [sup.id]);
+  }
+  await audit(c.db, { actor: c.user.id, action: past > 0 ? 'shop.supplier_archived' : 'shop.supplier_deleted', resource: 'supplier', resourceId: sup.id, ip: c.ip, details: { name: sup.name } });
+  return { result: past > 0 ? 'archived' : 'deleted' };
+}));
+adminShopRouter.delete('/products/:id', h(async (c) => {
+  requirePlatform(c, 'admin');
+  const prod = (await c.db.query('select * from products where id = $1 for update', [c.req.params.id])).rows[0];
+  if (!prod) throw notFound();
+  const past = await removeProducts(c, 'p.id = $1', prod.id);
+  if (past > 0) await c.db.query('update products set active = false where id = $1', [prod.id]);
+  else await c.db.query('delete from products where id = $1', [prod.id]);
+  await audit(c.db, { actor: c.user.id, action: past > 0 ? 'shop.product_archived' : 'shop.product_deleted', resource: 'product', resourceId: prod.id, ip: c.ip, details: { name: prod.name } });
+  return { result: past > 0 ? 'archived' : 'deleted' };
+}));
+
 adminShopRouter.get('/orders', h(async (c) => {
   requirePlatform(c, 'admin');
   const status = typeof c.req.query.status === 'string' && c.req.query.status ? c.req.query.status : null;

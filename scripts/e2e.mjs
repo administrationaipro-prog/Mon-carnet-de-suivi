@@ -340,6 +340,21 @@ try {
   await expectText(desk, 'Livrée');
   log('Stocks : alerte à 1 botte restante ; boutique : commande, confirmation, livraison et stock crédité');
 
+  // suppression de fournisseurs depuis l'administration
+  await adminPost('/admin/shop/suppliers', { name: `Doublon ${RUN}` });
+  await admin.goto(`${BASE}/admin`);
+  await admin.getByRole('tab', { name: 'Boutique' }).click();
+  admin.once('dialog', (dlg) => dlg.accept());
+  await admin.getByRole('button', { name: `Supprimer Doublon ${RUN}` }).click();
+  await expectText(admin, `« Doublon ${RUN} » a été supprimé.`);
+  admin.once('dialog', (dlg) => dlg.accept());
+  await admin.getByRole('button', { name: `Supprimer Coop fourrages ${RUN}` }).click();
+  await expectText(admin, 'retiré de la boutique et archivé');
+  await desk.goto(`${BASE}/boutique`);
+  await expectText(desk, 'Livrée'); // l'historique de commande de l'éleveur est conservé
+  if (await desk.getByText(`Foin pangola ${RUN}`, { exact: true }).count()) throw new Error('produit archivé encore en vente');
+  log('Fournisseurs : suppression définitive (sans commande) et archivage (avec historique)');
+
   // ---------- Aucune page ne doit déborder horizontalement sur un petit téléphone ----------
   await desk.setViewportSize({ width: 360, height: 740 });
   const overflowing = [];
