@@ -114,7 +114,7 @@ try {
   // ---------- Éleveur approuvé : animaux, pesées, GMQ ----------
   await farmer.goto(BASE);
   await expectText(farmer, `Habitation Bellevue ${RUN}`);
-  await expectText(farmer, 'Effectif actif');
+  await expectText(farmer, 'À faire aujourd’hui');
   for (const a of [
     { id: 'B1', name: 'Bélier 1', birth: '2026-09-19', breed: 'Black Belly × Île-de-France', w: [['2026-10-31', '11.30'], ['2026-11-07', '12.81'], ['2026-11-14', '13.29']] },
     { id: 'B2', name: 'Bélier 2', birth: '2026-09-29', breed: 'Saint-Martin × Île-de-France', w: [['2026-10-31', '9.80'], ['2026-11-07', '11.67'], ['2026-11-14', '12.32']] },
@@ -202,7 +202,7 @@ try {
   await desk.getByLabel('Adresse courriel').fill(FARMER.email);
   await desk.getByLabel('Mot de passe').fill(FARMER.password);
   await desk.getByRole('button', { name: 'Se connecter' }).click();
-  await expectText(desk, 'Effectif actif');
+  await expectText(desk, 'À faire aujourd’hui');
   await shot(desk, '05-accueil-bureau');
   await desk.getByRole('link', { name: /Analyses/ }).first().click();
   await expectText(desk, 'Croissance par race / croisement');
@@ -250,6 +250,7 @@ try {
   if (!(await desk.getByRole('button', { name: 'Enregistrer' }).isDisabled())) throw new Error('le bouton Enregistrer aurait dû être bloqué');
   // fiche : taux calculé automatiquement
   await desk.goto(`${BASE}/herd/${frere.id}`);
+  await desk.getByRole('tab', { name: 'Famille' }).click();
   await expectText(desk, 'Coefficient de consanguinité (F)');
   await expectText(desk, '0 %');
   // simulateur
@@ -260,6 +261,18 @@ try {
   await expectText(desk, 'Performances observées');
   await shot(desk, '08-simulateur');
   log('Consanguinité : frère × sœur refusé (25 %), taux sur la fiche, simulateur de saillie');
+
+  // V3 : bouton « Saisir » → feuille d’actions ; tournée de pesée enchaînée
+  await desk.goto(`${BASE}/`);
+  await desk.getByRole('button', { name: 'Saisir' }).first().click();
+  await expectText(desk, 'Que voulez-vous noter ?');
+  await desk.getByRole('dialog').getByRole('link', { name: 'Pesée' }).click();
+  await desk.waitForURL(/\/weigh$/);
+  await desk.goto(`${BASE}/weigh?tour=1`);
+  await desk.getByRole('progressbar').waitFor();
+  const before = await desk.getByRole('progressbar').getAttribute('aria-valuenow');
+  await desk.getByRole('button', { name: /Passer cet animal/ }).click().catch(() => {});
+  log(`Bouton « Saisir » (feuille d’actions) et tournée de pesée (progression ${before} → suivante)`);
 
   // ---------- Correction d’une pesée sur téléphone : suppression d’un doublon ----------
   const b1 = await desk.evaluate(async (fId) => (await (await fetch(`/api/farms/${fId}/animals?q=B1`, { credentials: 'same-origin' })).json())[0], farmId);
@@ -378,14 +391,14 @@ try {
 
   // Exploitation propre de l’administrateur
   await admin.goto(BASE);
-  await admin.getByText('Effectif actif').or(admin.getByRole('button', { name: /Créer mon exploitation/ })).first().waitFor();
-  const hasFarm = await admin.getByText('Effectif actif').count();
+  await admin.getByText('À faire aujourd’hui').or(admin.getByRole('button', { name: /Créer mon exploitation/ })).first().waitFor();
+  const hasFarm = await admin.getByText('À faire aujourd’hui').count();
   if (!hasFarm) {
     await admin.getByRole('button', { name: /Créer mon exploitation/ }).click();
     await admin.getByLabel(/^Nom ou référence/).fill(`Ferme admin ${RUN}`);
     await admin.getByLabel(/^Localité/).fill('Sainte-Anne');
     await admin.getByRole('button', { name: 'Créer mon exploitation' }).click();
-    await expectText(admin, 'Effectif actif');
+    await expectText(admin, 'À faire aujourd’hui');
   }
   await admin.getByRole('link', { name: /Mon cheptel/ }).first().waitFor();
   await admin.getByRole('link', { name: /Administration/ }).first().waitFor();

@@ -1,9 +1,9 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { post } from '../api';
-import { useState } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { Field } from '../components/ui';
 import { InstallButton } from '../components/Install';
-import { Icon } from '../components/Icon';
+import { Icon, type IconName } from '../components/Icon';
 import { useApp } from '../state';
 import { Card, ErrorMsg, Loading, Notice, Stat, useLoad, useSubmit, Badge } from '../components/ui';
 import { Registration } from './Registration';
@@ -106,9 +106,73 @@ export function CreateOwnFarm() {
   );
 }
 
+type Task = { key: string; to: string; icon: IconName; color: string; title: string; sub: string; chip?: ReactNode; action?: string };
+
+/** Regroupe les alertes : toutes les pesées en retard = une seule carte « Lancer la tournée ». */
+function useTasks(alerts: any[]): Task[] {
+  const { t, d, num } = useApp();
+  const chipFor = (iso: string) => {
+    const n = daysFromToday(iso);
+    return n < 0 ? <span className="chip err">{t('late_days', { n: -n })}</span> : n === 0 ? <span className="chip warn">{t('today_lbl')}</span> : <span className="chip info">{t('in_days', { n })}</span>;
+  };
+  const names = (xs: any[]) => [...new Set(xs.map((a) => a.animal))];
+  const overdue = alerts.filter((a) => a.type === 'weighing_overdue' || (a.type === 'weighing_due' && daysFromToday(a.due_date) <= 0));
+  const soon = alerts.filter((a) => a.type === 'weighing_due' && daysFromToday(a.due_date) > 0);
+  const out: Task[] = [];
+  if (overdue.length) {
+    const n = names(overdue);
+    out.push({ key: 'overdue', to: '/weigh?tour=1', icon: 'scale', color: 'red', title: t('v3_overdue_group', { n: n.length }), sub: `${t('overdue_weighings')} : ${overdue.length} · ` + n.slice(0, 4).join(', ') + (n.length > 4 ? '…' : ''), action: t('v3_start') });
+  }
+  for (const a of alerts.filter((x) => x.type.startsWith('stock'))) {
+    out.push({ key: `s${a.item_id}`, to: '/stock', icon: 'box', color: 'gold', title: `${t(`alert_t.${a.type}`)} : ${a.animal}`, sub: `${t('stock_left', { qty: num(a.qty, 1), unit: a.unit })} · ${t('stock_rupture', { date: d(a.due_date) })}`, chip: chipFor(a.due_date) });
+  }
+  for (const a of alerts.filter((x) => !x.type.startsWith('stock') && !x.type.startsWith('weighing'))) {
+    const icon: IconName = a.type === 'lambing_expected' ? 'repro' : 'health';
+    out.push({ key: `${a.type}${a.animal_id}${a.due_date}`, to: `/herd/${a.animal_id}`, icon, color: a.type === 'lambing_expected' ? 'gold' : 'blue', title: t(`alert_t.${a.type}`, { product: a.product ?? '' }), sub: `${a.animal} · ${d(a.due_date)}`, chip: chipFor(a.due_date) });
+  }
+  if (soon.length) {
+    const n = names(soon);
+    out.push({ key: 'soon', to: `/weigh`, icon: 'scale', color: '', title: t('v3_due_group', { n: soon.length }), sub: n.slice(0, 5).join(', ') + (n.length > 5 ? '…' : ''), chip: chipFor(soon.map((a) => a.due_date).sort()[0]) });
+  }
+  return out;
+}
+
+function TaskList({ tasks, limit }: { tasks: Task[]; limit: number }) {
+  const { t } = useApp();
+  if (!tasks.length) return <p className="muted" style={{ margin: 0 }}>{t('home_no_alerts')}</p>;
+  return (
+    <ul className="tasks">
+      {tasks.slice(0, limit).map((x) => (
+        <li key={x.key}>
+          <Link to={x.to} className="task">
+            <span className={`ic ${x.color}`}><Icon name={x.icon} /></span>
+            <span className="t"><b>{x.title}</b><small>{x.sub}</small></span>
+            {x.action ? <span className="btn primary small">{x.action}</span> : x.chip}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function HomeSearch() {
+  const { t } = useApp();
+  const nav = useNavigate();
+  const [q, setQ] = useState('');
+  return (
+    <form role="search" className="searchbar" onSubmit={(e) => { e.preventDefault(); nav(`/herd${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`); }}>
+      <Icon name="search" size={20} /><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('v3_search')} aria-label={t('v3_search')} />
+    </form>
+  );
+}
+
 export function Home() {
-  const { t, me, farm, d, num } = useApp();
+  const { t, me, farm, d, num, lang } = useApp();
   const dash = useLoad<any>(farm ? `/farms/${farm.id}/dashboard` : null, [farm?.id]);
+  const stock = useLoad<any[]>(farm ? `/farms/${farm.id}/stock` : null, [farm?.id]);
+  const animals = useLoad<any[]>(farm ? `/farms/${farm.id}/animals` : null, [farm?.id]);
+  const [all, setAll] = useState(false);
+  const tasks = useTasks(dash.data?.alerts ?? []);
   const role = me?.user?.platform_role;
 
   if (!farm) {
@@ -124,67 +188,101 @@ export function Home() {
   }
   const canWrite = farm.role !== 'referent';
   const g = dash.data?.growth;
+  const today = new Date().toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  const lambings = (dash.data?.alerts ?? []).filter((a: any) => a.type === 'lambing_expected').length;
+  const lots = Object.values((animals.data ?? []).filter((a) => a.status === 'active').reduce((m: Record<string, { name: string; n: number; gmq: number[] }>, a) => {
+    const k = a.lot_name ?? ''; m[k] ??= { name: a.lot_name ?? t('v3_no_lot'), n: 0, gmq: [] }; m[k].n++; if (a.gmq_overall !== null) m[k].gmq.push(Number(a.gmq_overall)); return m;
+  }, {})).sort((a, b) => b.n - a.n);
+  const maxLot = Math.max(1, ...lots.map((l) => l.n));
+  const weighings = (dash.data?.recent ?? []).filter((r: any) => r.kind === 'weighing').slice(0, 5);
+  const LIMIT = 4;
   return (
     <div className="stack">
-      <div className="greeting">
-        <small>{farm.name} · <Badge>{t(`mrole.${farm.role}`)}</Badge></small>
+      <div className="greet">
         <h1>{t('hello_name', { name: me?.user?.first_name ?? '' })}</h1>
+        <p>{today.charAt(0).toUpperCase() + today.slice(1)} · {farm.name} · <Badge>{t(`mrole.${farm.role}`)}</Badge></p>
       </div>
+      <HomeSearch />
       <Invitations />
       {dash.loading && !dash.data && <Loading />}
       <ErrorMsg error={dash.error} />
       {dash.data && (
-        <>
-          <section className="hero" aria-label={t('home_herd')}>
-            <div className="hero-row">
-              <div>
-                <div className="hero-label">{t('home_herd')}</div>
-                <div className="hero-big num">{dash.data.animals.active}</div>
-                <div className="hero-sub">{dash.data.animals.females} {t('females')} · {dash.data.animals.males} {t('males')}</div>
+        <div className="home-grid">
+          <div className="home-col">
+            <section className="hero" aria-label={t('home_herd')}>
+              <div className="hero-kpis">
+                <div className="k"><small>{t('v3_herd')}</small><b className="num">{dash.data.animals.active}</b><i>{dash.data.animals.females} ♀ · {dash.data.animals.males} ♂</i></div>
+                <div className="k"><small>{t('gmq_mean')}</small><b className="num">{g?.mean_overall ?? '—'}<em>{t('gmq_unit')}</em></b>
+                  <i>{g?.trend !== null && g?.trend !== undefined ? `${g.trend >= 0 ? '▲' : '▼'} ${t('trend_vs', { n: `${g.trend >= 0 ? '+' : ''}${g.trend}` })}` : g?.animals_measured ? t('animals_measured', { n: g.animals_measured }) : t('gmq_no_data')}</i></div>
+                <div className="k"><small>{t('v3_lambings')}</small><b className="num">{lambings}</b><i>{t('v3_within_10')}</i></div>
+                <div className="k wide"><small>{t('v3_weighings')}</small><b className="num">{dash.data.weighings.last_30_days}</b><i>{t('v3_30d')}</i></div>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div className="hero-label">{t('gmq_mean')}</div>
-                <div className="hero-mid num">{g?.mean_overall ?? '—'} <span style={{ fontSize: '.9rem', opacity: .8 }}>{t('gmq_unit')}</span></div>
-                {g?.trend !== null && g?.trend !== undefined ? (
-                  <span className="chip">{g.trend >= 0 ? '▲' : '▼'} {t('trend_vs', { n: `${g.trend >= 0 ? '+' : ''}${g.trend}` })}</span>
-                ) : <div className="hero-sub">{g?.animals_measured ? t('animals_measured', { n: g.animals_measured }) : t('gmq_no_data')}</div>}
-              </div>
-            </div>
-            {g && <Sparkline points={g.weekly.map((w: any) => w.gmq)} />}
-          </section>
+              {g && <Sparkline points={g.weekly.map((w: any) => w.gmq)} />}
+            </section>
 
-          <div className="tiles">
-            {canWrite && <Link className="tile" to="/weigh"><span className="ti"><Icon name="scale" /></span>{t('tile_weigh')}</Link>}
-            {canWrite && <Link className="tile mango" to="/herd/new"><span className="ti"><Icon name="plus" /></span>{t('tile_new_animal')}</Link>}
-            <Link className="tile sky" to="/health"><span className="ti"><Icon name="health" /></span>{t('nav_health')}</Link>
-            <Link className="tile" to="/stock"><span className="ti"><Icon name="box" /></span>{t('nav_stock')}</Link>
-            <Link className="tile" to="/herd"><span className="ti"><Icon name="list" /></span>{t('nav_herd')}</Link>
-            <Link className="tile" to="/analytics"><span className="ti"><Icon name="chart" /></span>{t('nav_analytics')}</Link>
+            {canWrite && (
+              <nav className="qa-row" aria-label={t('v3_add')}>
+                <Link className="qa" to="/weigh"><span className="ic"><Icon name="scale" size={18} /></span>{t('tile_weigh')}</Link>
+                <Link className="qa" to="/health"><span className="ic blue"><Icon name="health" size={18} /></span>{t('v3_act_health')}</Link>
+                <Link className="qa" to="/repro"><span className="ic gold"><Icon name="repro" size={18} /></span>{t('v3_act_repro')}</Link>
+                <Link className="qa" to="/stock"><span className="ic grey"><Icon name="box" size={18} /></span>{t('v3_act_stock')}</Link>
+                <Link className="qa" to="/herd/new"><span className="ic grey"><Icon name="plus" size={18} /></span>{t('tile_new_animal')}</Link>
+              </nav>
+            )}
+
+            <section className="stack-sm">
+              <div className="sec-head"><h2>{t('v3_today_tasks')}</h2>{tasks.length > LIMIT && <button className="btn ghost small" onClick={() => setAll(!all)}>{all ? t('close') : t('v3_more_tasks', { n: tasks.length - LIMIT })}</button>}</div>
+              <TaskList tasks={tasks} limit={all ? 100 : LIMIT} />
+            </section>
+
+            {lots.length > 0 && (
+              <Card>
+                <div className="sec-head" style={{ marginBottom: '.8rem' }}><h2>{t('v3_lots')}</h2><Link to="/herd">{t('v3_open_herd')}</Link></div>
+                <div>
+                  {lots.slice(0, 6).map((l, i) => (
+                    <div className="lot-row" key={l.name}>
+                      <div className="row between nowrap"><b style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</b>
+                        <span className="small num" style={{ whiteSpace: 'nowrap' }}>{t('v3_heads', { n: l.n })}{l.gmq.length ? <> · <b>{num(l.gmq.reduce((s, x) => s + x, 0) / l.gmq.length, 0)} {t('gmq_unit')}</b></> : null}</span></div>
+                      <div className="meter"><span style={{ width: `${(l.n / maxLot) * 100}%`, background: ['var(--primary-bright)', 'var(--info)', 'var(--accent)', '#8A3FA8'][i % 4] }} /></div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
           </div>
 
-          <div className="grid2">
-            <section className="stack-sm">
-              <div className="row between"><h2>{t('home_todo')}</h2><span className="chip">{dash.data.alerts.length}</span></div>
-              <AlertList alerts={dash.data.alerts} limit={8} />
-            </section>
-            <section className="stack-sm">
-              <div className="row between"><h2>{t('home_last_obs')}</h2><span className="chip" title={t('home_weighings_30')}>{t('n_weighings_30d', { n: dash.data.weighings.last_30_days })}</span></div>
+          <div className="home-col">
+            {!!stock.data?.length && (
               <Card>
-                {dash.data.recent.length === 0 ? <p className="muted">—</p> : (
-                  <ul className="list">
-                    {dash.data.recent.map((r: any, i: number) => (
-                      <li key={i} className="row between">
-                        <span className="row"><span className="avatar sm"><Icon name={r.kind === 'weighing' ? 'scale' : 'health'} size={20} /></span><span><Link to={`/herd/${r.animal_id}`}><b>{r.animal}</b></Link><div className="small muted">{d(r.date)}</div></span></span>
-                        <b className="num">{r.kind === 'weighing' ? `${num(Number(r.value), 2)} kg` : t(`htype.${r.value}`)}</b>
-                      </li>
-                    ))}
-                  </ul>
+                <div className="sec-head" style={{ marginBottom: '.8rem' }}><h2>{t('v3_stocks')}</h2><Link to="/stock">{t('v3_manage')}</Link></div>
+                {stock.data.slice(0, 4).map((it) => {
+                  const e = it.estimate; const horizon = Math.max(30, it.lead_days * 3);
+                  return (
+                    <div className="stock-line" key={it.id}>
+                      <div className="row between nowrap"><b>{it.name}</b><span className={`chip ${{ ok: 'ok', order: 'warn', empty: 'err', unknown: '' }[e.status as string]}`}>{t(`stst.${e.status}`)}</span></div>
+                      {e.days_left !== null && <div className="meter"><span style={{ width: `${Math.max(3, Math.min(100, (e.days_left / horizon) * 100))}%`, background: e.status === 'ok' ? 'var(--primary-bright)' : e.status === 'order' ? 'var(--accent)' : 'var(--danger)' }} /></div>}
+                      <div className="small muted">{e.estimated === null ? '—' : `${num(e.estimated, 1)} ${it.unit}`}{e.days_left !== null ? ` · ${t('stock_days_left', { n: num(e.days_left, 0) })}` : ''}</div>
+                    </div>
+                  );
+                })}
+                {canWrite && stock.data.some((it) => it.estimate.status === 'order' || it.estimate.status === 'empty') && (
+                  <Link className="btn accent block" style={{ marginTop: '1rem' }} to="/boutique"><Icon name="cart" size={18} />{t('stock_order_btn')}</Link>
                 )}
               </Card>
-              <div className="row"><InstallButton small /></div>
-            </section>
+            )}
+            <Card>
+              <div className="sec-head" style={{ marginBottom: '.8rem' }}><h2>{t('v3_last_weighings')}</h2><span className="chip" title={t('home_weighings_30')}>{t('n_weighings_30d', { n: dash.data.weighings.last_30_days })}</span></div>
+              {weighings.length === 0 ? <p className="muted" style={{ margin: 0 }}>—</p> : (
+                <div className="mini-table">
+                  {weighings.map((r: any, i: number) => (
+                    <Fragment key={i}><Link to={`/herd/${r.animal_id}`}>{r.animal}</Link><span className="small muted">{d(r.date)}</span><b className="num">{num(Number(r.value), 2)} kg</b></Fragment>
+                  ))}
+                </div>
+              )}
+            </Card>
+            <div className="row"><InstallButton small /></div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
