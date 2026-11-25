@@ -467,10 +467,56 @@ try {
   if (after !== 404) throw new Error('accès vétérinaire non retiré : ' + after);
   log('Vétérinaire : compte vérifié, code de consultation, avis signé, tournée « 5 points », coproscopie importée (lecture auto), signée, PDF vérifiable, accès retiré');
 
+  // ---------- Saillies entre élevages : publication, catalogue, simulation à deux, proposition acceptée ----------
+  const F2 = { email: `eleveur2-${RUN}@example.org`, password: 'Brebis-Francois-2026' };
+  const f2Ctx = await browser.newContext({ viewport: { width: 1180, height: 820 }, hasTouch: true });
+  const f2 = await f2Ctx.newPage(); watch(f2, 'éleveur 2');
+  await f2.goto(BASE);
+  const api2 = (method, path, body) => f2.evaluate(async ([m, p, b]) => {
+    const r = await fetch('/api' + p, { method: m, credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-requested-with': 'carnet' }, body: b ? JSON.stringify(b) : undefined });
+    return { status: r.status, body: await r.json().catch(() => ({})) };
+  }, [method, path, body]);
+  await api2('POST', '/auth/register', { email: F2.email, password: F2.password, first_name: 'Line', last_name: 'Sainte-Rose', lang: 'fr' });
+  await api2('POST', '/auth/verify-email', { token: await token(F2.email) });
+  const reg2 = await api2('PUT', '/registration/mine?submit=1', { territory_code: 'MQ', farm_name: `Élevage du François ${RUN}`, locality: 'Le François', production_type: 'sheep_meat', herd_size: 12, message: null, accepted_terms: true, truthful_declaration: true });
+  const dec2 = await adminPost(`/registration/review/${reg2.body.id}/decision`, { action: 'approve' });
+  if (dec2.status !== 200) throw new Error('éleveur 2 non approuvé : ' + JSON.stringify(dec2));
+  const farm2 = dec2.body.farm_id;
+  await api2('POST', `/farms/${farm2}/animals`, { internal_id: 'PERLE', name: 'Perle', sex: 'F', birth_date: '2023-03-01', breed_code: 'MARTINIK' });
+  // l'éleveur 1 publie Bélier 1 depuis sa fiche (onglet Famille)
+  await desk.goto(`${BASE}/herd/${b1.id}`);
+  await desk.getByRole('tab', { name: 'Famille' }).click();
+  await desk.getByRole('button', { name: /Partager pour une saillie/ }).click();
+  await desk.getByLabel('Conditions (facultatif)').fill('Lutte libre 30 jours, tarif à convenir.');
+  await desk.getByRole('button', { name: 'Publier dans le catalogue' }).click();
+  await expectText(desk, 'Publié dans le catalogue des saillies');
+  // l'éleveur 2 le trouve dans le catalogue, simule avec Perle et envoie une proposition
+  await f2.goto(`${BASE}/saillies`);
+  const brCard = f2.locator('.br-card', { hasText: 'Bélier 1' });
+  await brCard.waitFor();
+  await brCard.getByText('Compatible avec vos 1 animaux').waitFor();
+  await shot(f2, '11a-catalogue-saillies');
+  await brCard.getByRole('link', { name: 'Simuler' }).click();
+  await expectText(f2, 'Consanguinité attendue de l’agneau');
+  await expectText(f2, 'Ce que l’agneau peut donner');
+  await f2.getByLabel('Message').fill('Saillie souhaitée en janvier ?');
+  await shot(f2, '11b-simulation-a-deux');
+  await f2.getByRole('button', { name: 'Envoyer la proposition' }).click();
+  await f2.getByText('En attente').first().waitFor();
+  // l'éleveur 1 reçoit la proposition et l'accepte
+  await desk.goto(`${BASE}/saillies?tab=mine`);
+  await desk.locator('.task', { hasText: 'Perle' }).first().click();
+  await expectText(desk, 'Saillie souhaitée en janvier ?');
+  await desk.getByRole('button', { name: 'Accepter' }).click();
+  await desk.getByText('Acceptée').first().waitFor();
+  await f2.goto(`${BASE}/saillies?tab=mine`);
+  await f2.getByText('Acceptée').first().waitFor();
+  log('Saillies entre élevages : publication depuis la fiche, catalogue (compatibilité), simulation à deux, proposition acceptée');
+
   // ---------- Aucune page ne doit déborder horizontalement sur un petit téléphone ----------
   await desk.setViewportSize({ width: 360, height: 740 });
   const overflowing = [];
-  for (const path of ['/', '/herd', `/herd/${b1.id}`, '/herd/new', '/weigh', '/analytics', '/feeding', '/stock', '/boutique', '/health', '/repro', '/simulateur', '/parcels', '/members', '/collective', '/account', '/notifications', '/installer', '/parasitisme', '/parasitisme/tournee', '/parasitisme/seuils/ovine', '/veterinaire']) {
+  for (const path of ['/', '/herd', `/herd/${b1.id}`, '/herd/new', '/weigh', '/analytics', '/feeding', '/stock', '/boutique', '/health', '/repro', '/simulateur', '/parcels', '/members', '/collective', '/account', '/notifications', '/installer', '/parasitisme', '/parasitisme/tournee', '/parasitisme/seuils/ovine', '/veterinaire', '/saillies', '/saillies?tab=mine']) {
     await desk.goto(BASE + path); await desk.waitForTimeout(400);
     const extra = await desk.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     if (extra > 1) overflowing.push(`${path} (+${extra}px)`);

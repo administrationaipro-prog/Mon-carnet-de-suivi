@@ -38,7 +38,7 @@ export function SyncBar() {
 
 const farmNav: [string, string, IconName][] = [
   ['/', 'nav_home', 'home'], ['/herd', 'nav_herd', 'list'], ['/weigh', 'nav_weigh', 'scale'], ['/analytics', 'nav_analytics', 'chart'],
-  ['/feeding', 'nav_feeding', 'wheat'], ['/stock', 'nav_stock', 'box'], ['/boutique', 'nav_shop', 'cart'], ['/health', 'nav_health', 'health'], ['/parasitisme', 'nav_parasite', 'shield'], ['/repro', 'nav_repro', 'repro'], ['/simulateur', 'nav_simulator', 'dna'], ['/parcels', 'nav_parcels', 'grid'],
+  ['/feeding', 'nav_feeding', 'wheat'], ['/stock', 'nav_stock', 'box'], ['/boutique', 'nav_shop', 'cart'], ['/health', 'nav_health', 'health'], ['/parasitisme', 'nav_parasite', 'shield'], ['/repro', 'nav_repro', 'repro'], ['/simulateur', 'nav_simulator', 'dna'], ['/saillies', 'nav_breeding', 'users'], ['/parcels', 'nav_parcels', 'grid'],
   ['/members', 'nav_members', 'users'], ['/veterinaire', 'nav_vet_access', 'health'], ['/collective', 'nav_collective', 'globe'],
 ];
 /** Pages visibles d'un vétérinaire en consultation, selon les portées accordées par l'éleveur. */

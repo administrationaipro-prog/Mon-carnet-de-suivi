@@ -469,3 +469,32 @@ input.switch:checked { background: var(--primary-bright); } input.switch:checked
 tr.warnrow td { background: var(--accent-soft); }
 .res-table td { vertical-align: middle; }
 .tour-animal .chip { white-space: normal; }
+
+/* ===== Saillies entre élevages ===== */
+:root { --plum: #7a3496; --plum-soft: #F1E6F6; }
+@media (prefers-color-scheme: dark) { :root { --plum: #D7A6EA; --plum-soft: #34223D; } }
+.br-ani { width: 50px; height: 50px; border-radius: 16px; display: grid; place-items: center; font-size: 26px; flex: none; margin-right: .2rem; }
+.br-ani.mine { background: var(--primary-soft); } .br-ani.theirs { background: var(--plum-soft); }
+.farmtag { display: inline-flex; font-size: .72rem; font-weight: 800; border-radius: 999px; padding: .15rem .55rem; margin-top: .25rem; background: var(--plum-soft); color: var(--plum); }
+.farmtag.mine { background: var(--primary-soft); color: var(--primary); }
+.br-filters { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.br-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr)); }
+.br-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow); min-width: 0; }
+.br-ph { height: 86px; display: grid; place-items: center; font-size: 44px; position: relative; border-radius: 0; }
+.br-ph.m { background: var(--plum-soft); } .br-ph.f { background: var(--accent-soft); }
+.br-ph.big { height: 110px; font-size: 56px; border-radius: 16px; }
+.br-tl { position: absolute; top: 8px; left: 8px; } .br-tr { position: absolute; top: 8px; right: 8px; }
+.br-bd { padding: .8rem .9rem; display: flex; flex-direction: column; gap: .55rem; flex: 1; }
+.br-kp, .br-stat3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem; }
+.br-kp div { background: var(--bg); border-radius: 10px; padding: .35rem .5rem; } .br-kp small { display: block; font-size: .66rem; color: var(--muted); font-weight: 700; } .br-kp b { font-size: .92rem; }
+.br-stat3 div { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: .55rem .4rem; text-align: center; }
+.br-stat3 b { display: block; font-size: 1.2rem; } .br-stat3 small { font-size: .7rem; color: var(--muted); font-weight: 700; }
+.br-compat { font-size: .8rem; font-weight: 750; border-radius: 10px; padding: .35rem .55rem; }
+.br-compat.ok { background: var(--primary-soft); color: var(--primary); } .br-compat.w { background: var(--accent-soft); color: color-mix(in srgb, var(--accent) 50%, var(--text)); } .br-compat.no { background: var(--surface-2); color: var(--muted); }
+.br-pair { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: .6rem; align-items: center; }
+@media (max-width: 640px) { .br-pair { grid-template-columns: minmax(0, 1fr); } }
+.br-x { font-size: 1.4rem; color: var(--muted); text-align: center; }
+.compare.br-cmp { grid-template-columns: minmax(0, 1.3fr) repeat(3, minmax(0, 1fr)); font-size: .85rem; }
+.compare .v.est { color: var(--plum); background: color-mix(in srgb, var(--plum-soft) 55%, transparent); padding-right: .4rem; }
+.br-pred { background: linear-gradient(140deg, var(--accent-soft), var(--surface)); border: 1.5px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 20px; padding: .9rem 1rem; }
+button.task.br-share { width: 100%; cursor: pointer; border-color: color-mix(in srgb, var(--plum) 35%, var(--border)); }

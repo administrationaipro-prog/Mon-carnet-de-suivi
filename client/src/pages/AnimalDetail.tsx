@@ -8,6 +8,7 @@ import { useApp } from '../state';
 import { Badge, Card, ErrorMsg, Field, Loading, Modal, Notice, numOrNull, useLoad, useSubmit } from '../components/ui';
 import { WeighingForm } from '../components/WeighingForm';
 import { useBreeds } from './Herd';
+import { ShareForBreeding } from './Breeding';
 
 function daysBetween(a: string, b: string) { return Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000); }
 
@@ -125,6 +126,7 @@ export function AnimalDetail() {
         </Card>
       )}
 
+      {farm.role !== 'referent' && farm.role !== 'vet' && <ShareForBreeding animal={x} />}
       </>}
       {tab === 'growth' && <>
       <Card title={t('growth_curve')}>

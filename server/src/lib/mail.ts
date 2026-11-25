@@ -60,6 +60,14 @@ const T: Record<string, Record<Lang, (p: any) => { subject: string; body: string
     fr: (p) => ({ subject: 'Avis vétérinaire sur le protocole parasitaire', body: `${p.vet} a validé les seuils parasitaires (${p.species}) de « ${p.farm} ».\nConsulter : ${config.publicUrl}/parasitisme` }),
     en: (p) => ({ subject: 'Veterinary opinion on the parasite protocol', body: `${p.vet} validated the parasite thresholds (${p.species}) of “${p.farm}”.\nView: ${config.publicUrl}/parasitisme` }),
   },
+  breeding_proposal: {
+    fr: (p) => ({ subject: `Proposition de saillie : ${p.animal} × ${p.other}`, body: `L’élevage « ${p.from} » vous propose une saillie entre votre animal ${p.animal} et son animal ${p.other} (consanguinité attendue de l’agneau : ${p.pct} %).${p.message ? `\nMessage : ${p.message}` : ''}\n\nVoir la simulation et répondre : ${config.publicUrl}/saillies/proposition/${p.id}` }),
+    en: (p) => ({ subject: `Mating proposal: ${p.animal} × ${p.other}`, body: `Farm “${p.from}” proposes a mating between your animal ${p.animal} and its animal ${p.other} (expected lamb inbreeding: ${p.pct} %).${p.message ? `\nMessage: ${p.message}` : ''}\n\nSee the simulation and reply: ${config.publicUrl}/saillies/proposition/${p.id}` }),
+  },
+  breeding_response: {
+    fr: (p) => ({ subject: `Proposition de saillie ${p.accepted ? 'acceptée' : 'refusée'}`, body: `L’élevage « ${p.farm} » a ${p.accepted ? 'accepté' : 'refusé'} votre proposition de saillie.${p.message ? `\nMessage : ${p.message}` : ''}\n\n${config.publicUrl}/saillies/proposition/${p.id}` }),
+    en: (p) => ({ subject: `Mating proposal ${p.accepted ? 'accepted' : 'declined'}`, body: `Farm “${p.farm}” ${p.accepted ? 'accepted' : 'declined'} your mating proposal.${p.message ? `\nMessage: ${p.message}` : ''}\n\n${config.publicUrl}/saillies/proposition/${p.id}` }),
+  },
   new_request: {
     fr: (p) => ({ subject: 'Nouvelle demande d’inscription à examiner', body: `Une demande (${p.territory}) vous est affectée. Connectez-vous à l’espace de validation.` }),
     en: (p) => ({ subject: 'New registration request to review', body: `A request (${p.territory}) has been assigned to you. Sign in to the review area.` }),
