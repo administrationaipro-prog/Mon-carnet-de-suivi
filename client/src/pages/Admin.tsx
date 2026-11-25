@@ -3,9 +3,10 @@ import { useEffect, useState } from 'react';
 import { del, patch, post, put } from '../api';
 import { useApp } from '../state';
 import { Icon } from '../components/Icon';
+import { AdminVets } from './Vet';
 import { Badge, Card, ErrorMsg, Field, Notice, Stat, useLoad, useSubmit } from '../components/ui';
 
-const TABS = ['admin_stats', 'users', 'farms_admin', 'shop_admin', 'referentials', 'settings', 'audit', 'outbox'] as const;
+const TABS = ['admin_stats', 'users', 'farms_admin', 'admin_vets', 'shop_admin', 'referentials', 'settings', 'audit', 'outbox'] as const;
 
 export function Admin() {
   const { t } = useApp();
@@ -17,6 +18,7 @@ export function Admin() {
       {tab === 'admin_stats' && <Overview />}
       {tab === 'users' && <Users />}
       {tab === 'farms_admin' && <Farms />}
+      {tab === 'admin_vets' && <AdminVets />}
       {tab === 'shop_admin' && <AdminShop />}
       {tab === 'referentials' && <Referentials />}
       {tab === 'settings' && <Settings />}

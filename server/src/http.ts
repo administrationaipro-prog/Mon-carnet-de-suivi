@@ -89,6 +89,7 @@ export function errorHandler(err: any, req: Request, res: Response, _next: NextF
   if (err?.code === '42501') return res.status(403).json({ error: 'forbidden' }); // violation RLS
   if (err?.code === '23505') return res.status(409).json({ error: 'unique_violation', details: err.constraint });
   if (err?.code === '23503') return res.status(400).json({ error: 'invalid_reference', details: err.constraint });
+  if (err?.code === '55000' && String(err?.message).includes('report_signed')) return res.status(409).json({ error: 'report_signed' });
   if (err?.code === '23514') return res.status(400).json({ error: 'check_violation', details: err.constraint });
   if (err?.code === '22P02' || err?.code === '22007' || err?.code === '22008') return res.status(400).json({ error: 'invalid_value' });
   console.error(`[erreur] ${req.method} ${req.path}`, err);
@@ -96,7 +97,7 @@ export function errorHandler(err: any, req: Request, res: Response, _next: NextF
 }
 
 // ---------- Contrôles d’accès exploitation ----------
-export type FarmRole = 'owner' | 'collaborator' | 'referent' | 'admin_grant';
+export type FarmRole = 'owner' | 'collaborator' | 'referent' | 'admin_grant' | 'vet';
 export type FarmMode = 'read' | 'write' | 'manage';
 
 export async function farmAccess(c: Ctx, farmId: string, mode: FarmMode): Promise<FarmRole> {
@@ -106,6 +107,11 @@ export async function farmAccess(c: Ctx, farmId: string, mode: FarmMode): Promis
       where m.farm_id = $1 and m.user_id = $2 and m.status = 'active'`, [farmId, c.user.id]);
   const m = rows[0];
   if (!m) {
+    const v = await activeVetGrant(c.db, farmId, c.user.id);
+    if (v) {
+      if (mode !== 'read') throw forbidden('read_only');
+      return 'vet';
+    }
     if (c.user.platform_role === 'admin') {
       const g = await c.db.query('select 1 from admin_access_grants where farm_id = $1 and admin_id = $2 and expires_at > now()', [farmId, c.user.id]);
       if (g.rowCount) {
@@ -119,6 +125,50 @@ export async function farmAccess(c: Ctx, farmId: string, mode: FarmMode): Promis
   if (mode === 'write' && !['owner', 'collaborator'].includes(m.role)) throw forbidden('read_only');
   if (mode === 'manage' && m.role !== 'owner') throw forbidden('owner_only');
   return m.role;
+}
+
+/** Accès de consultation vétérinaire en cours (vétérinaire vérifié, non révoqué, non expiré). */
+export async function activeVetGrant(db: { query: Db['query'] }, farmId: string, userId: string) {
+  const { rows } = await db.query(
+    `select va.id, va.scopes, va.expires_at from vet_access va join vet_profiles vp on vp.user_id = va.vet_id join farms f on f.id = va.farm_id
+      where va.farm_id = $1 and va.vet_id = $2 and va.revoked_at is null and va.expires_at > now() and vp.status = 'verified' and f.status = 'active'
+      order by va.expires_at desc limit 1`, [farmId, userId]);
+  return (rows[0] as { id: string; scopes: string[]; expires_at: string } | undefined) ?? null;
+}
+
+/** Le vétérinaire doit disposer d'un accès en cours incluant la portée demandée. */
+export async function requireVet(c: Ctx, farmId: string, scope = 'health') {
+  if (!/^[0-9a-f-]{36}$/i.test(farmId)) throw notFound('farm_not_found');
+  const g = await activeVetGrant(c.db, farmId, c.user.id);
+  if (!g) throw forbidden('vet_access_required');
+  if (!g.scopes.includes(scope)) throw forbidden('vet_scope_denied');
+  const p = (await c.db.query('select * from vet_profiles where user_id = $1', [c.user.id])).rows[0];
+  return { grant: g, profile: p };
+}
+
+/** Portée d'une ressource d'exploitation, pour limiter ce que voit un vétérinaire en consultation. */
+const VET_SCOPE: Record<string, string | null> = {
+  animals: 'herd', weighings: 'herd', lots: 'herd', dashboard: 'herd', alerts: 'herd', history: 'herd', growth: 'herd',
+  analytics: 'herd', indicators: 'herd', 'mating-simulator': 'repro', mating: 'repro', repro: 'repro', inbreeding: 'herd',
+  health: 'health', parasite: 'health', copro: 'health', files: 'health',
+  feeding: 'feeding', stock: 'feeding', orders: 'feeding', parcels: 'feeding',
+  vet: null,
+};
+export async function vetScopeGuard(req: Request, _res: Response, next: NextFunction) {
+  try {
+    const farmId = req.params.farmId as string | undefined;
+    if (!req.user || !farmId || !/^[0-9a-f-]{36}$/i.test(farmId)) return next();
+    const seg = req.path.split('/').filter(Boolean)[0] ?? '';
+    const member = await pool.query(`select 1 from memberships where farm_id = $1 and user_id = $2 and status = 'active'`, [farmId, req.user.id]);
+    if (member.rowCount) return next();
+    const g = await activeVetGrant(pool, farmId, req.user.id);
+    if (!g) return next(); // farmAccess répondra « introuvable »
+    if (seg === '' ) return next();
+    const scope = seg in VET_SCOPE ? VET_SCOPE[seg] : undefined;
+    if (scope === null) return next();
+    if (scope === undefined || !g.scopes.includes(scope)) return next(new HttpError(403, 'vet_scope_denied'));
+    next();
+  } catch (e) { next(e); }
 }
 
 export function requirePlatform(c: Ctx, ...roles: User['platform_role'][]) {

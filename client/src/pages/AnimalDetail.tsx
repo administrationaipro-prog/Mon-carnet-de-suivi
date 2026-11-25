@@ -110,7 +110,7 @@ export function AnimalDetail() {
       </div>
 
       {x.inbreeding && (
-        <Card title={t('inbreeding')} actions={farm.role !== 'referent' && <Link className="btn small" to={`/simulateur?${x.sex === 'M' ? 'ram' : 'ewe'}=${x.id}`}><Icon name="dna" size={16} />{t('sim_open')}</Link>}>
+        <Card title={t('inbreeding')} actions={farm.role !== 'referent' && farm.role !== 'vet' && <Link className="btn small" to={`/simulateur?${x.sex === 'M' ? 'ram' : 'ewe'}=${x.id}`}><Icon name="dna" size={16} />{t('sim_open')}</Link>}>
           {x.inbreeding.computable ? (
             <div className="stack-sm">
               <div className="row between wrap">

@@ -30,6 +30,12 @@ services:
         sync: false
       - key: MAIL_FROM_EMAIL
         sync: false
+      # Code de signature des vétérinaires par SMS (Brevo, expéditeur 11 caractères max.) ; sans lui, le code part par courriel
+      - key: BREVO_SMS_SENDER
+        sync: false
+      # Lecture automatique des comptes rendus de coproscopie (API Claude) ; sans elle, saisie manuelle
+      - key: ANTHROPIC_API_KEY
+        sync: false
       - key: MAIL_FROM_NAME
         value: Carnet de suivi
     # PUBLIC_URL est déduite automatiquement de RENDER_EXTERNAL_URL (https://….onrender.com)

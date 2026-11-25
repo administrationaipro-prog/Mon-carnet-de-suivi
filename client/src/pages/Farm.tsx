@@ -19,7 +19,7 @@ export function Members() {
     <div className="stack">
       <h1>{t('members_title')}</h1>
       {info.data && (
-        <Card title={t('farm_settings')} actions={owner && !fs && <button className="btn small" onClick={() => setFs({ name: info.data.name, locality: info.data.locality ?? '', objective: info.data.objective, conduct_system: info.data.conduct_system ?? '' })}>{t('edit')}</button>}>
+        <Card title={t('farm_settings')} actions={owner && !fs && <button className="btn small" onClick={() => setFs({ name: info.data.name, locality: info.data.locality ?? '', objective: info.data.objective, conduct_system: info.data.conduct_system ?? '', ede_number: info.data.ede_number ?? '' })}>{t('edit')}</button>}>
           {!fs ? (
             <dl className="dl">
               <dt>{t('farm_name')}</dt><dd>{info.data.name}</dd>
@@ -27,6 +27,7 @@ export function Members() {
               <dt>{t('locality')}</dt><dd>{info.data.locality ?? '—'}</dd>
               <dt>{t('objective')}</dt><dd>{t(`objective.${info.data.objective}`)}</dd>
               <dt>{t('conduct_system')}</dt><dd>{info.data.conduct_system ?? '—'}</dd>
+              <dt>{t('ede_number')}</dt><dd>{info.data.ede_number ?? <span className="muted">{t('missing')}</span>}</dd>
             </dl>
           ) : (
             <form className="stack" onSubmit={(e) => { e.preventDefault(); sf.run(); }}>
@@ -35,6 +36,7 @@ export function Members() {
                 <Field label={t('locality')}><input value={fs.locality} onChange={(e) => setFs({ ...fs, locality: e.target.value })} /></Field>
                 <Field label={t('objective')}><select value={fs.objective} onChange={(e) => setFs({ ...fs, objective: e.target.value })}>{['meat', 'reproduction', 'mixed'].map((o) => <option key={o} value={o}>{t(`objective.${o}`)}</option>)}</select></Field>
                 <Field label={t('conduct_system')}><input value={fs.conduct_system} onChange={(e) => setFs({ ...fs, conduct_system: e.target.value })} /></Field>
+                <Field label={t('ede_number')} hint={t('ede_hint')}><input maxLength={30} value={fs.ede_number} onChange={(e) => setFs({ ...fs, ede_number: e.target.value })} /></Field>
               </div>
               <ErrorMsg error={sf.error} />
               <div className="row"><button className="btn primary">{t('save')}</button><button type="button" className="btn" onClick={() => setFs(null)}>{t('cancel')}</button></div>

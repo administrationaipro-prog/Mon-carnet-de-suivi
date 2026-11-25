@@ -355,10 +355,122 @@ try {
   if (await desk.getByText(`Foin pangola ${RUN}`, { exact: true }).count()) throw new Error('produit archivé encore en vente');
   log('Fournisseurs : suppression définitive (sans commande) et archivage (avec historique)');
 
+  // ---------- Vétérinaire : compte vérifié, consultation par code, avis signé, coproscopie importée et signée ----------
+  const VET = { email: `veto-${RUN}@example.org`, password: 'Veto-Martinique-2026' };
+  const vetCtx = await browser.newContext({ viewport: { width: 1180, height: 820 }, hasTouch: true });
+  const vetP = await vetCtx.newPage(); watch(vetP, 'vétérinaire');
+  await vetP.goto(`${BASE}/register`);
+  await vetP.getByLabel('Prénom').fill('Marie');
+  await vetP.getByLabel(/^Nom/).fill('Laurent');
+  await vetP.getByLabel('Adresse courriel').fill(VET.email);
+  await vetP.getByLabel('Mot de passe').fill(VET.password);
+  await vetP.getByRole('button', { name: 'Créer un compte' }).click();
+  await expectText(vetP, 'Vérifiez votre adresse courriel');
+  await vetP.goto(`${BASE}/verify-email?token=${await token(VET.email)}`);
+  await vetP.getByRole('button', { name: 'Confirmer' }).click();
+  await expectText(vetP, 'Adresse vérifiée');
+  await vetP.goto(BASE);
+  await vetP.getByRole('button', { name: /Je suis vétérinaire/ }).click();
+  await vetP.getByLabel(/N° d’inscription à l’Ordre/).fill('27345');
+  await vetP.getByLabel(/Clinique/).fill('Clinique vétérinaire du Lamentin');
+  await vetP.getByRole('button', { name: 'Envoyer pour vérification' }).click();
+  await expectText(vetP, 'En vérification');
+  await admin.goto(`${BASE}/admin`);
+  await admin.getByRole('tab', { name: 'Vétérinaires' }).click();
+  await admin.locator('li', { hasText: VET.email }).getByRole('button', { name: 'Valider l’inscription' }).click();
+  await admin.locator('li', { hasText: VET.email }).getByText('Vérifié').waitFor();
+  // l'éleveur montre un code
+  await desk.goto(`${BASE}/veterinaire`);
+  await desk.getByRole('button', { name: 'Afficher un code' }).click();
+  const vcode = (await desk.locator('.code-big').innerText()).trim();
+  await vetP.goto(`${BASE}/veto`);
+  await expectText(vetP, 'Ouvrir une consultation avec un code');
+  await vetP.getByLabel('Code de consultation').fill(vcode);
+  await vetP.getByRole('button', { name: 'Accéder à l’exploitation' }).click();
+  await expectText(vetP, `Consultation ouverte par l’éleveur : Habitation Bellevue ${RUN}`);
+  // avis signé sur les seuils ovins
+  const signOn = async (page, email) => {
+    await page.locator('canvas.sigpad').scrollIntoViewIfNeeded();
+    const box = await page.locator('canvas.sigpad').boundingBox();
+    await page.mouse.move(box.x + 30, box.y + 90); await page.mouse.down();
+    for (const [dx, dy] of [[80, 30], [140, 100], [210, 40], [300, 110], [380, 60]]) await page.mouse.move(box.x + dx, box.y + dy, { steps: 6 });
+    await page.mouse.up();
+    await page.getByRole('button', { name: 'Recevoir le code de confirmation' }).click();
+    await expectText(page, 'Code envoyé par courriel');
+    const r = await db.query(`select subject from outbox_emails where to_email = $1 and subject like 'Code de signature%' order by id desc limit 1`, [email]);
+    await page.getByLabel(/Code de confirmation/).fill(/(\d{6})/.exec(r.rows[0].subject)[1]);
+  };
+  await vetP.getByRole('link', { name: 'Donner mon avis' }).first().click();
+  await vetP.getByLabel('Condition : état corporel inférieur ou égal à').fill('2.5');
+  await vetP.getByLabel('Coproscopie : seuil de traitement (œufs par gramme)').fill('800');
+  await vetP.getByLabel('Commentaire du vétérinaire').fill('Saison des pluies : tournées tous les 14 jours.');
+  await signOn(vetP, VET.email);
+  await vetP.getByRole('button', { name: 'Signer l’avis' }).click();
+  await expectText(vetP, 'Seuils Ovins validés');
+  await shot(vetP, '10a-veto-avis-signe');
+  // l'éleveur : seuils validés, tournée d'examen
+  await desk.goto(`${BASE}/parasitisme`);
+  await expectText(desk, 'Seuils Ovins validés');
+  await desk.goto(`${BASE}/parasitisme/tournee`);
+  const tourAnimal = desk.locator('.tour-animal h2');
+  for (let i = 0; i < 12; i++) {
+    const name = (await tourAnimal.innerText()).trim();
+    if (name === 'Bélier 1') {
+      await desk.getByRole('button', { name: '4', exact: true }).first().click();
+      await expectText(desk, 'Candidat au traitement');
+      await desk.getByRole('button', { name: /Enregistrer et suivant|^Enregistrer$/ }).click();
+      break;
+    }
+    await desk.getByRole('button', { name: /Passer cet animal/ }).click();
+  }
+  await desk.goto(`${BASE}/parasitisme`);
+  await expectText(desk, 'Bilan de la dernière tournée');
+  await desk.locator('li', { hasText: 'Bélier 1' }).getByText('À traiter').waitFor();
+  // l'éleveur prépare la coproscopie (pré-remplie avec l'animal à traiter)
+  await desk.getByRole('button', { name: 'Préparer une coproscopie' }).click();
+  await expectText(desk, 'Animaux prélevés (1)');
+  await desk.getByRole('button', { name: 'Créer le rapport' }).click();
+  await expectText(desk, 'En attente du vétérinaire');
+  const copro = (await asUser(FARMER.email, `select id, number from copro_reports order by created_at desc limit 1`)).rows[0];
+  // le vétérinaire importe le compte rendu (lecture automatique en mode démonstration), vérifie, interprète, signe
+  await vetP.goto(`${BASE}/parasitisme/copro/${copro.id}`);
+  await vetP.locator('input[type=file]').first().setInputFiles({ name: 'compte-rendu-labo.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n') });
+  await expectText(vetP, 'résultat(s) lu(s)', 20000);
+  await expectText(vetP, 'identifiant(s) à rattacher');
+  await shot(vetP, '10b-veto-import-ia');
+  await vetP.locator('tr.warnrow').getByRole('button', { name: 'Supprimer' }).click();
+  await vetP.getByLabel('Interprétation et conclusion du vétérinaire').fill('Infestation marquée chez Bélier 1, compatible avec une haemonchose. Traitement ciblé selon ordonnance.');
+  await vetP.getByRole('button', { name: 'Enregistrer', exact: true }).click();
+  await expectText(vetP, 'Signature du vétérinaire');
+  await vetP.locator('canvas.sigpad').waitFor();
+  await signOn(vetP, VET.email);
+  await vetP.getByRole('button', { name: 'Signer et valider' }).click();
+  await expectText(vetP, 'Signé par Dr Marie Laurent');
+  // l'éleveur : rapport signé, PDF, accusé de lecture, vérification publique
+  await desk.goto(`${BASE}/parasitisme/copro/${copro.id}`);
+  await expectText(desk, 'Signé par Dr Marie Laurent (n° 27345)');
+  const pdfHref = await desk.getByRole('link', { name: 'Ouvrir le PDF signé' }).getAttribute('href');
+  const pdfRes = await desk.request.get(BASE + pdfHref);
+  if (!(pdfRes.headers()['content-type'] ?? '').includes('application/pdf') || (await pdfRes.body()).subarray(0, 5).toString() !== '%PDF-') throw new Error('PDF signé indisponible');
+  await desk.getByRole('button', { name: 'J’ai pris connaissance du rapport' }).click();
+  await expectText(desk, 'Pris connaissance par l’éleveur');
+  await shot(desk, '10c-rapport-signe');
+  const pub = await (await browser.newContext()).newPage();
+  await pub.goto(`${BASE}/verifier/${copro.number}`);
+  await expectText(pub, `Document authentique : rapport ${copro.number}`);
+  // l'éleveur retire l'accès : le vétérinaire ne voit plus l'exploitation
+  await desk.goto(`${BASE}/veterinaire`);
+  desk.once('dialog', (dlg) => dlg.accept());
+  await desk.getByRole('button', { name: 'Retirer l’accès' }).first().click();
+  await expectText(desk, 'retiré');
+  const after = await vetP.evaluate(async (fid) => (await fetch(`/api/farms/${fid}/copro`)).status, copro && (await db.query('select farm_id from vet_access order by created_at desc limit 1')).rows[0].farm_id);
+  if (after !== 404) throw new Error('accès vétérinaire non retiré : ' + after);
+  log('Vétérinaire : compte vérifié, code de consultation, avis signé, tournée « 5 points », coproscopie importée (lecture auto), signée, PDF vérifiable, accès retiré');
+
   // ---------- Aucune page ne doit déborder horizontalement sur un petit téléphone ----------
   await desk.setViewportSize({ width: 360, height: 740 });
   const overflowing = [];
-  for (const path of ['/', '/herd', `/herd/${b1.id}`, '/herd/new', '/weigh', '/analytics', '/feeding', '/stock', '/boutique', '/health', '/repro', '/simulateur', '/parcels', '/members', '/collective', '/account', '/notifications', '/installer']) {
+  for (const path of ['/', '/herd', `/herd/${b1.id}`, '/herd/new', '/weigh', '/analytics', '/feeding', '/stock', '/boutique', '/health', '/repro', '/simulateur', '/parcels', '/members', '/collective', '/account', '/notifications', '/installer', '/parasitisme', '/parasitisme/tournee', '/parasitisme/seuils/ovine', '/veterinaire']) {
     await desk.goto(BASE + path); await desk.waitForTimeout(400);
     const extra = await desk.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     if (extra > 1) overflowing.push(`${path} (+${extra}px)`);

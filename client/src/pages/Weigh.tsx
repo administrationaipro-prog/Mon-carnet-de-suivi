@@ -93,8 +93,8 @@ function WeighOne() {
   const conflicts = queue.filter((q) => q.conflict);
   return (
     <div className="stack">
-      <div className="row between"><h1>{t('weigh_title')}</h1>{farm.role !== 'referent' && <Link className="btn" to="/weigh?tour=1"><Icon name="list" size={18} />{t('v3_tour')}</Link>}</div>
-      {farm.role === 'referent' ? <ErrorMsg error={new ApiError(403, 'read_only')} /> : (
+      <div className="row between"><h1>{t('weigh_title')}</h1>{farm.role !== 'referent' && farm.role !== 'vet' && <Link className="btn" to="/weigh?tour=1"><Icon name="list" size={18} />{t('v3_tour')}</Link>}</div>
+      {(farm.role === 'referent' || farm.role === 'vet') ? <ErrorMsg error={new ApiError(403, 'read_only')} /> : (
         <div className="stack">
           <Card>
             <div className="picker">

@@ -53,7 +53,7 @@ export function Shop() {
   const cancel = useSubmit(async (id: string) => { await post(`/farms/${farm!.id}/orders/${id}/cancel`); orders.reload(); products.reload(); });
   useEffect(() => { if (highlight && products.data) document.getElementById(`p-${highlight}`)?.scrollIntoView({ block: 'center' }); }, [highlight, products.data]);
   if (!farm) return null;
-  const canWrite = farm.role !== 'referent';
+  const canWrite = farm.role !== 'referent' && farm.role !== 'vet';
   const all = products.data ?? [];
   const cats = PRODUCT_CATEGORIES.filter((c) => all.some((p) => p.category === c));
   const shown = all.filter((p) => !cat || p.category === cat || p.id === highlight);
