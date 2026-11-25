@@ -30,6 +30,7 @@ export function Mating() {
     <div className="stack">
       <h1><Icon name="dna" size={26} />{t('sim_title')}</h1>
       <p className="muted" style={{ margin: 0 }}>{t('sim_intro')}</p>
+      <Link className="task" to="/saillies"><span className="ic plum"><Icon name="users" /></span><span className="t"><b>{t('br_with_other')}</b><small>{t('br_with_other_sub')}</small></span><Icon name="chev" /></Link>
       <Card>
         <div className="grid3">
           <Field label={t('ram')} required>

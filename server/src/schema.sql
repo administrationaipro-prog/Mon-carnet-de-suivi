@@ -626,6 +626,59 @@ create table if not exists copro_results (
 );
 create sequence if not exists copro_number_seq;
 
+
+-- ===================== Saillies entre élevages =====================
+-- Annonce de reproducteur (catalogue public des éleveurs) et/ou code privé ; les données de l'autre élevage
+-- ne sont lues que par le serveur (contexte « breeding_service »), jamais directement par l'utilisateur.
+create table if not exists breeding_listings (
+  id uuid primary key default gen_random_uuid(),
+  farm_id uuid not null references farms(id) on delete cascade,
+  animal_id uuid not null,
+  status text not null default 'active' check (status in ('active','paused','withdrawn')),
+  available_until date,
+  locality text,
+  territory_code text references territories(code),
+  modality text not null default 'onsite' check (modality in ('onsite','travel','both')),
+  conditions text,
+  views integer not null default 0,
+  simulations integer not null default 0,
+  created_by uuid references users(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  foreign key (animal_id, farm_id) references animals(id, farm_id) on delete cascade
+);
+create unique index if not exists breeding_listings_one_per_animal on breeding_listings(animal_id) where status <> 'withdrawn';
+create table if not exists breeding_codes (
+  id uuid primary key default gen_random_uuid(),
+  farm_id uuid not null references farms(id) on delete cascade,
+  animal_id uuid not null,
+  code text not null unique,
+  expires_at timestamptz not null,
+  revoked_at timestamptz,
+  created_by uuid references users(id),
+  created_at timestamptz not null default now(),
+  foreign key (animal_id, farm_id) references animals(id, farm_id) on delete cascade
+);
+create table if not exists breeding_proposals (
+  id uuid primary key default gen_random_uuid(),
+  listing_id uuid references breeding_listings(id) on delete set null,
+  code_id uuid references breeding_codes(id) on delete set null,
+  from_farm_id uuid not null references farms(id) on delete cascade,
+  from_animal_id uuid not null,
+  to_farm_id uuid not null references farms(id) on delete cascade,
+  to_animal_id uuid not null,
+  message text,
+  status text not null default 'pending' check (status in ('pending','accepted','declined','cancelled')),
+  response_message text,
+  snapshot jsonb not null,
+  created_by uuid references users(id),
+  responded_by uuid references users(id),
+  created_at timestamptz not null default now(),
+  responded_at timestamptz
+);
+create index if not exists breeding_proposals_to on breeding_proposals(to_farm_id, created_at desc);
+create index if not exists breeding_proposals_from on breeding_proposals(from_farm_id, created_at desc);
+
 -- ===================== Row-Level Security =====================
 
 create or replace function app_uid() returns uuid language sql stable as $$
@@ -743,6 +796,18 @@ create trigger copro_results_guard before insert or update or delete on copro_re
 -- Page publique « Vérifier un document » : uniquement les rapports signés, dans une transaction app.ctx = 'verify'
 drop policy if exists p_verify on copro_reports;
 create policy p_verify on copro_reports for select using (current_setting('app.ctx', true) = 'verify' and status = 'signed');
+
+-- Service de saillie : lecture des animaux, pesées, naissances et reproduction d'un autre élevage,
+-- uniquement dans une transaction ouverte par le serveur (app.ctx = 'breeding_service').
+do $$
+declare t text;
+begin
+  foreach t in array array['animals','weighings','births','repro_events']
+  loop
+    execute format('drop policy if exists p_breeding_service on %I', t);
+    execute format('create policy p_breeding_service on %I for select using (current_setting(''app.ctx'', true) = ''breeding_service'')', t);
+  end loop;
+end $$;
 
 -- ===================== Référentiels =====================
 

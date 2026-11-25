@@ -21,6 +21,7 @@ import { InstallPage } from './components/Install';
 import { AuthShell } from './pages/Auth';
 import { Icon } from './components/Icon';
 import { VetSpace, FarmVetAccess, VerifyPage } from './pages/Vet';
+import { BreedingHome, ListingPage, BreedingSimulation, ProposalPage } from './pages/Breeding';
 import { ParasiteHome, ExamTour, ParasiteSettingsPage, CoproPage } from './pages/Parasite';
 
 function AdminFarm() { const { id } = useParams(); return <AdminFarmView id={id!} />; }
@@ -71,6 +72,10 @@ function Routed() {
         <Route path="/parcels" element={needFarm(<Parcels />)} />
         <Route path="/members" element={needFarm(<Members />)} />
         <Route path="/collective" element={farm || role === 'analyst' || role === 'admin' ? <Collective /> : <Navigate to="/" replace />} />
+        <Route path="/saillies" element={needFarm(<BreedingHome />)} />
+        <Route path="/saillies/annonce/:id" element={needFarm(<ListingPage />)} />
+        <Route path="/saillies/simulation" element={needFarm(<BreedingSimulation />)} />
+        <Route path="/saillies/proposition/:id" element={needFarm(<ProposalPage />)} />
         <Route path="/parasitisme" element={needFarm(<ParasiteHome />)} />
         <Route path="/parasitisme/tournee" element={needFarm(<ExamTour />)} />
         <Route path="/parasitisme/seuils/:species" element={needFarm(<ParasiteSettingsPage />)} />

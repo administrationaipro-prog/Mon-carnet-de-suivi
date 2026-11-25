@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { loadSession, csrf, errorHandler, vetScopeGuard } from './http.js';
 import { vetRouter, farmVetRouter, adminVetRouter, publicVerifyRouter } from './routes/vet.js';
 import { parasiteRouter } from './routes/parasite.js';
+import { breedingRouter, farmBreedingRouter } from './routes/breeding.js';
 import { authRouter } from './routes/auth.js';
 import { registrationRouter } from './routes/registration.js';
 import { farmsRouter, invitationsRouter } from './routes/farms.js';
@@ -52,6 +53,8 @@ export function createApp() {
   api.use('/farms/:farmId', animalsRouter);
   api.use('/farms/:farmId', parasiteRouter);
   api.use('/farms/:farmId', farmVetRouter);
+  api.use('/farms/:farmId', farmBreedingRouter);
+  api.use('/breeding', breedingRouter);
   api.use('/vet', vetRouter);
   api.use('/admin/vets', adminVetRouter);
   api.use('/public', publicVerifyRouter);
