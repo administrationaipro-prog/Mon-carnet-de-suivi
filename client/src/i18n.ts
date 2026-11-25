@@ -222,6 +222,14 @@ const fr = {
   'err.born_alive_required': 'Indiquez le nombre de nés vivants.', 'err.weaned_required': 'Indiquez le nombre de sevrés.', 'err.parent_not_found': 'Parent introuvable dans cette exploitation.',
   'err.invalid_value': 'Valeur invalide.', 'err.check_violation': 'Valeur hors limites.', 'err.cannot_change_self': 'Vous ne pouvez pas modifier vos propres droits.',
   'err.collective_access_denied': 'Statistiques collectives réservées aux membres d’une exploitation validée.', 'err.export_reserved_to_farm': 'Export réservé à l’exploitation.',
+  v3_add: 'Saisir', v3_sheet_title: 'Que voulez-vous noter ?', v3_sheet_sub: 'Choisissez une action, puis l’animal.', v3_offline_ok: 'Fonctionne aussi sans réseau : synchronisé au retour.',
+  v3_act_weigh: 'Pesée', v3_act_health: 'Soin / santé', v3_act_repro: 'Naissance / repro', v3_act_mating: 'Saillie (simulateur)', v3_act_feed: 'Ration', v3_act_stock: 'Stock',
+  v3_new_animal_sub: 'Achat, naissance ou reprise', v3_search: 'Rechercher un animal, une boucle…', v3_today_n: '{n} chose(s) à faire', v3_today_none: 'Rien d’urgent aujourd’hui',
+  v3_herd: 'Effectif', v3_lambings: 'Mises bas', v3_within_10: 'sous 10 j', v3_today_tasks: 'À faire aujourd’hui', v3_see_all: 'Tout voir',
+  v3_overdue_group: '{n} animal(aux) à peser', v3_due_group: '{n} pesées à faire', v3_start_tour: 'Lancer la tournée', v3_start: 'Lancer', v3_more_tasks: '+ {n} autre(s)',
+  v3_stocks: 'Stocks', v3_manage: 'Gérer', v3_weighings: 'Pesées', v3_30d: 'sur 30 jours', v3_lots: 'Troupeau par lot', v3_no_lot: 'Sans lot', v3_heads: '{n} têtes', v3_open_herd: 'Ouvrir le troupeau', v3_last_weighings: 'Dernières pesées',
+  v3_tour: 'Tournée de pesée', v3_tour_done: 'Tournée terminée : {n} pesée(s) enregistrée(s).', v3_tour_empty: 'Aucune pesée en retard ou à faire aujourd’hui.', v3_prev: 'Précédent', v3_save_next: 'Enregistrer et suivant', v3_skip: 'Passer cet animal', v3_quit: 'Quitter la tournée',
+  v3_tab_growth: 'Croissance', v3_tab_health: 'Santé', v3_tab_family: 'Famille', v3_tab_repro: 'Repro',
   'err.end_before_start': 'La fin précède le début.', 'err.mail_not_configured': 'Envoi des courriels non configuré.', 'err.followup_before_date': 'Le suivi précède la date de l’événement.', 'err.account_suspended': 'Compte suspendu.',
 };
 
@@ -428,6 +436,14 @@ const en: Record<keyof typeof fr, string> = {
   'err.born_alive_required': 'Enter the number born alive.', 'err.weaned_required': 'Enter the number weaned.', 'err.parent_not_found': 'Parent not found in this farm.',
   'err.invalid_value': 'Invalid value.', 'err.check_violation': 'Value out of range.', 'err.cannot_change_self': 'You cannot change your own rights.',
   'err.collective_access_denied': 'Collective statistics are reserved to members of an approved farm.', 'err.export_reserved_to_farm': 'Export reserved to the farm.',
+  v3_add: 'Record', v3_sheet_title: 'What do you want to record?', v3_sheet_sub: 'Choose an action, then the animal.', v3_offline_ok: 'Also works offline: synced when back online.',
+  v3_act_weigh: 'Weighing', v3_act_health: 'Care / health', v3_act_repro: 'Birth / breeding', v3_act_mating: 'Mating (simulator)', v3_act_feed: 'Ration', v3_act_stock: 'Stock',
+  v3_new_animal_sub: 'Purchase, birth or takeover', v3_search: 'Search an animal, a tag…', v3_today_n: '{n} thing(s) to do', v3_today_none: 'Nothing urgent today',
+  v3_herd: 'Herd', v3_lambings: 'Lambings', v3_within_10: 'within 10 d', v3_today_tasks: 'To do today', v3_see_all: 'See all',
+  v3_overdue_group: '{n} animal(s) to weigh', v3_due_group: '{n} weighings due', v3_start_tour: 'Start the round', v3_start: 'Start', v3_more_tasks: '+ {n} more',
+  v3_stocks: 'Stocks', v3_manage: 'Manage', v3_weighings: 'Weighings', v3_30d: 'over 30 days', v3_lots: 'Herd by group', v3_no_lot: 'No group', v3_heads: '{n} head', v3_open_herd: 'Open the herd', v3_last_weighings: 'Latest weighings',
+  v3_tour: 'Weighing round', v3_tour_done: 'Round finished: {n} weighing(s) saved.', v3_tour_empty: 'No weighing overdue or due today.', v3_prev: 'Previous', v3_save_next: 'Save and next', v3_skip: 'Skip this animal', v3_quit: 'Leave the round',
+  v3_tab_growth: 'Growth', v3_tab_health: 'Health', v3_tab_family: 'Family', v3_tab_repro: 'Breeding',
   'err.end_before_start': 'End is before start.', 'err.mail_not_configured': 'Email sending not configured.', 'err.followup_before_date': 'Follow-up is before the event date.', 'err.account_suspended': 'Account suspended.',
 };
 

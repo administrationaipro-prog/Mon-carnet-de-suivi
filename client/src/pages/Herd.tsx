@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { post, put, todayIso } from '../api';
 import { useApp } from '../state';
 import { Badge, Card, ErrorMsg, Field, Loading, Notice, numOrNull, strOrNull, useLoad, useSubmit, downloadUrl } from '../components/ui';
@@ -13,7 +13,8 @@ export function useBreeds() {
 
 export function Herd() {
   const { t, farm, d, num } = useApp();
-  const [q, setQ] = useState(''); const [sex, setSex] = useState(''); const [breed, setBreed] = useState(''); const [status, setStatus] = useState('');
+  const [sp] = useSearchParams();
+  const [q, setQ] = useState(sp.get('q') ?? ''); const [sex, setSex] = useState(''); const [breed, setBreed] = useState(''); const [status, setStatus] = useState('');
   const [lot, setLot] = useState('');
   const params = new URLSearchParams({ ...(q && { q }), ...(sex && { sex }), ...(breed && { breed }), ...(status && { status }), ...(lot && { lot }) }).toString();
   const list = useLoad<any[]>(farm ? `/farms/${farm.id}/animals?${params}` : null);

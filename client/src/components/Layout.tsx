@@ -4,6 +4,7 @@ import { useApp } from '../state';
 import { readQueue, subscribe, flush } from '../offline';
 import { InstallButton } from './Install';
 import { Icon, type IconName } from './Icon';
+import { ActionSheet } from './ActionSheet';
 
 export function LangSwitch() {
   const { lang, setLang, t } = useApp();
@@ -44,6 +45,8 @@ const farmNav: [string, string, IconName][] = [
 export function Layout({ children }: { children: ReactNode }) {
   const { t, me, farm, setFarmId, logout } = useApp();
   const [menu, setMenu] = useState(false);
+  const [sheet, setSheet] = useState(false);
+  const canWrite = !!farm && farm.role !== 'referent';
   const role = me?.user?.platform_role;
   const hasFarm = !!farm;
   const links: [string, string, IconName][] = [
@@ -54,7 +57,7 @@ export function Layout({ children }: { children: ReactNode }) {
     ['/notifications', 'nav_notifications', 'bell'], ['/account', 'nav_account', 'user'],
   ];
   const tab = (to: string, k: string, icon: IconName) => (
-    <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => (isActive ? 'active' : '')}><Icon name={icon} /><small>{t(k)}</small></NavLink>
+    <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => (isActive ? 'active' : '')}><span className="tab-ic"><Icon name={icon} /></span><small>{t(k)}</small></NavLink>
   );
   return (
     <div className="app">
@@ -67,6 +70,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </select>
         ) : farm ? <span className="farm-name hide-mobile" title={t('farm')}>{farm.name}</span> : <span />}
         <div className="topbar-right">
+          {canWrite && <button className="btn accent small add-btn" onClick={() => setSheet(true)}><Icon name="plus" size={18} stroke={2.4} />{t('v3_add')}</button>}
           <LangSwitch />
           <Link to="/notifications" className="icon-btn" aria-label={t('nav_notifications')}><Icon name="bell" />{!!me?.unread_notifications && <span className="dot">{me.unread_notifications}</span>}</Link>
           <button className="btn ghost small hide-mobile" onClick={logout}><Icon name="logout" size={18} />{t('logout')}</button>
@@ -88,7 +92,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <>
             {tab('/', 'nav_home', 'home')}
             {tab('/herd', 'nav_herd', 'list')}
-            <NavLink to="/weigh" className={({ isActive }) => `fab ${isActive ? 'active' : ''}`} aria-label={t('nav_weigh')}><Icon name="scale" size={28} stroke={2.2} /></NavLink>
+            {canWrite && <button className="fab" aria-label={t('v3_add')} aria-haspopup="dialog" aria-expanded={sheet} onClick={() => { setMenu(false); setSheet(true); }}><Icon name="plus" size={28} stroke={2.6} /></button>}
             {tab('/analytics', 'nav_analytics', 'chart')}
           </>
         ) : (
@@ -98,8 +102,9 @@ export function Layout({ children }: { children: ReactNode }) {
             {tab('/account', 'nav_account', 'user')}
           </>
         )}
-        <button onClick={() => setMenu(!menu)} aria-expanded={menu}><Icon name={menu ? 'x' : 'menu'} /><small>{t('nav_more')}</small></button>
+        <button onClick={() => setMenu(!menu)} aria-expanded={menu}><span className="tab-ic"><Icon name={menu ? 'x' : 'menu'} /></span><small>{t('nav_more')}</small></button>
       </nav>
+      {sheet && <ActionSheet onClose={() => setSheet(false)} />}
     </div>
   );
 }

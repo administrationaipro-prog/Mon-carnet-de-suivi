@@ -6,6 +6,7 @@ import { ErrorMsg, Field, Notice, numOrNull } from './ui';
 import { Icon } from './Icon';
 
 type Props = {
+  submitLabel?: string;
   animal: { id: string; internal_id: string; name?: string | null; birth_date?: string | null } | null;
   last?: { date: string; weight_kg: number } | null;
   onSaved?: () => void;
@@ -15,7 +16,7 @@ const addDaysIso = (iso: string, n: number) => { const d = new Date(iso + 'T12:0
 const coarse = () => typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
 
 /** Saisie d’une pesée : validation serveur, confirmation explicite des alertes, file hors connexion. */
-export function WeighingForm({ animal, last, onSaved }: Props) {
+export function WeighingForm({ animal, last, onSaved, submitLabel }: Props) {
   const { t, farm, online, num } = useApp();
   const [f, setF] = useState({ date: todayIso(), weight_kg: '', height_cm: '', length_cm: '', note: '' });
   const [warnings, setWarnings] = useState<string[] | null>(null);
@@ -41,6 +42,7 @@ export function WeighingForm({ animal, last, onSaved }: Props) {
       else if (e instanceof ApiError && e.status === 0) {
         enqueue({ client_uuid, farmId: farm.id, animalId: animal.id, animalLabel: animal.name ?? animal.internal_id, body, queued_at: new Date().toISOString() });
         setMsg(t('weighing_queued')); setF({ ...f, weight_kg: '', height_cm: '', length_cm: '', note: '' });
+        onSaved?.();
       } else setError(e);
     } finally { setBusy(false); }
   };
@@ -102,7 +104,7 @@ export function WeighingForm({ animal, last, onSaved }: Props) {
       )}
       <ErrorMsg error={error} />
       {msg && <Notice kind="ok">{msg}</Notice>}
-      <button className="btn primary block xl" disabled={busy || !animal}><Icon name="check" />{t('save_weighing')}</button>
+      <button className="btn primary block xl" disabled={busy || !animal}><Icon name="check" />{submitLabel ?? t('save_weighing')}</button>
     </form>
   );
 }

@@ -20,6 +20,7 @@ export function AnimalDetail() {
   const { label } = useBreeds();
   const [weighOpen, setWeighOpen] = useState(false);
   const [edit, setEdit] = useState<any | null>(null);
+  const [tab, setTab] = useState<'growth' | 'health' | 'family' | 'repro'>('growth');
   const canWrite = farm?.role === 'owner' || farm?.role === 'collaborator';
   const remove = useSubmit(async () => {
     const reason = window.prompt(t('delete_reason'));
@@ -48,6 +49,12 @@ export function AnimalDetail() {
             <div className="hero-sub">{t(`sex.${x.sex}`)}{x.birth_date ? ` · ${t('born_on', { date: d(x.birth_date) })} · ${t('age_n_days', { n: daysBetween(x.birth_date, x.exit_date ?? todayIso()) })}` : ''}</div>
           </div>
         </div>
+        <div className="animal-tags">
+          {x.lot?.name && <span className="chip">{t('lot')} · {x.lot.name}</span>}
+          {x.objective && <span className="chip">{t(`objective.${x.objective}`)}</span>}
+          {x.inbreeding?.computable && <span className="chip">{t('inbreeding')} {num(x.inbreeding.coefficient_percent, 1)} %</span>}
+          {g.schedule.overdue.length > 0 && <span className="chip" style={{ background: 'var(--danger)' }}>{t('overdue_weighings')} · {g.schedule.overdue.length}</span>}
+        </div>
       </section>
       <div className="kpis">
         <div className="stat"><div className="stat-label">{t('last_weight')}</div><div className="stat-value">{g.last ? num(g.last.weight_kg, 2) : '—'}<small className="muted" style={{ fontSize: '.75rem' }}> kg</small></div></div>
@@ -61,6 +68,12 @@ export function AnimalDetail() {
         {farm.role === 'owner' && <button className="btn danger" onClick={() => remove.run()}><Icon name="trash" size={18} />{t('delete')}</button>}
       </div>}
       <ErrorMsg error={remove.error} />
+      <div className="seg-tabs" role="tablist" aria-label={t('identity')}>
+        {(['growth', 'health', 'family', ...((x.sex === 'F' || x.repro.length > 0) ? ['repro'] : [])] as const).map((k) => (
+          <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k as typeof tab)}>{t(`v3_tab_${k}`)}</button>
+        ))}
+      </div>
+      {tab === 'family' && <>
       <div className="grid2">
         <Card title={t('identity')}>
           <dl className="dl">
@@ -112,6 +125,8 @@ export function AnimalDetail() {
         </Card>
       )}
 
+      </>}
+      {tab === 'growth' && <>
       <Card title={t('growth_curve')}>
         {g.schedule.overdue.length > 0 && <Notice kind="warn">{t('overdue_weighings')} : {g.schedule.overdue.map((o: any) => `J${o.day} (${d(o.date)})`).join(', ')}</Notice>}
         {chart.length > 0 && (
@@ -162,7 +177,13 @@ export function AnimalDetail() {
         )}
       </Card>
 
-      <div className="grid2">
+      {!!hist.data?.length && (
+        <Card title={t('history_corrections')}>
+          <ul className="list small">{hist.data.map((h) => <li key={h.id}>{dt(h.at)} · {h.actor_name} · {h.action}{h.reason ? ` · ${h.reason}` : ''}</li>)}</ul>
+        </Card>
+      )}
+      </>}
+      {tab === 'health' && <div className="grid2">
         <Card title={t('health_title')} actions={canWrite && <Link className="btn small" to={`/health?animal=${x.id}`}>＋</Link>}>
           {x.health.length === 0 ? <p className="muted">—</p> : <ul className="list small">{x.health.map((h: any) => (
             <li key={h.id}>{d(h.date)} · <strong>{t(`htype.${h.type}`)}</strong>{h.symptoms ? ` · ${h.symptoms}` : ''}{h.diagnosis ? ` · ${t(`dstatus.${h.diagnosis_status}`)} : ${h.diagnosis}` : ''}{h.treatment || h.product ? ` · ${h.treatment ?? ''} ${h.product ?? ''}` : ''}{h.analysis_result ? ` · ${h.analysis_type ?? ''} ${h.analysis_result}` : ''}</li>
@@ -173,17 +194,12 @@ export function AnimalDetail() {
             <li key={f.id}>{d(f.start_date)}{f.end_date ? ` → ${d(f.end_date)}` : ''} · {f.feed} · {num(f.quantity_kg, 2)} kg ({t(`basis.${f.basis}`)}, {t(`fkind.${f.kind}`)}){f.lot_id ? ` · ${t('lot')}` : ''}</li>
           ))}</ul>}
         </Card>
-      </div>
-      {(x.sex === 'F' || x.repro.length > 0) && (
+      </div>}
+      {tab === 'repro' && (
         <Card title={t('repro_title')} actions={canWrite && x.sex === 'F' && <Link className="btn small" to={`/repro?ewe=${x.id}`}>＋</Link>}>
           {x.repro.length === 0 ? <p className="muted">—</p> : <ul className="list small">{x.repro.map((r: any) => (
             <li key={r.id}>{d(r.date)} · {t(`rtype.${r.type}`)}{r.ram_internal_id ? ` · ${t('ram')} ${r.ram_internal_id}` : ''}{r.born_alive !== null ? ` · ${t('born_alive')} ${r.born_alive}` : ''}{r.born_dead ? ` · ${t('born_dead')} ${r.born_dead}` : ''}{r.weaned !== null ? ` · ${t('weaned')} ${r.weaned}` : ''}{r.result ? ` · ${r.result}` : ''}</li>
           ))}</ul>}
-        </Card>
-      )}
-      {!!hist.data?.length && (
-        <Card title={t('history_corrections')}>
-          <ul className="list small">{hist.data.map((h) => <li key={h.id}>{dt(h.at)} · {h.actor_name} · {h.action}{h.reason ? ` · ${h.reason}` : ''}</li>)}</ul>
         </Card>
       )}
 
